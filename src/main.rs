@@ -11,6 +11,16 @@ use alloy::primitives::Address;
 use alloy::transports::http::reqwest::Url;
 use clap::Parser;
 
+use axum::{
+    extract::{Query, State},
+    http::StatusCode,
+    routing::get,
+    Json, Router,
+};
+use hex;
+use serde::Deserialize;
+use std::collections::HashMap;
+
 #[derive(Parser)]
 #[command(name = "daggboard")]
 #[command(about = "daggboard", long_about = None)]
@@ -26,6 +36,97 @@ struct Cli {
     rollup_manager_address: String,
 }
 
+#[derive(Clone)]
+struct AppState {
+    database: Database,
+}
+
+#[derive(Deserialize)]
+struct QueryParams {
+    q: String,
+}
+
+async fn query_handler(
+    State(state): State<AppState>,
+    Query(params): Query<QueryParams>,
+) -> std::result::Result<Json<Vec<HashMap<String, String>>>, (StatusCode, String)> {
+    println!("----debuggg");
+    let query = params.q;
+    let lowered = query.to_lowercase();
+    // Disallow mutating queries
+    let prohibited = [
+        "insert", "update", "delete", "create", "drop", "alter", "truncate", "replace",
+    ];
+    if prohibited.iter().any(|kw| lowered.contains(kw)) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Mutating queries are not allowed".to_string(),
+        ));
+    }
+
+    // Acquire DB connection
+    let conn = state.database.db().lock().await;
+    let mut stmt = match conn.prepare(&query) {
+        Ok(s) => s,
+        Err(e) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("Failed to prepare query: {}", e),
+            ))
+        }
+    };
+
+    let mut rows = match stmt.query([]) {
+        Ok(r) => r,
+        Err(e) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("Failed to execute query: {}", e),
+            ))
+        }
+    };
+
+    let mut column_names: Option<Vec<String>> = None;
+    let mut results: Vec<HashMap<String, String>> = Vec::new();
+    while let Some(row) = rows
+        .next()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    {
+        if column_names.is_none() {
+            // Lazily initialize column names after the first step
+            column_names = Some({
+                let stmt_ref = row.as_ref();
+                (0..stmt_ref.column_count())
+                    .map(|i| stmt_ref.column_name(i).unwrap().clone())
+                    .collect()
+            });
+        }
+        let names = column_names.as_ref().unwrap();
+        let mut map = HashMap::new();
+        for (i, col) in names.iter().enumerate() {
+            // Try to coerce the value into a string regardless of its underlying SQL type
+            let value: String = if let Ok(v) = row.get::<usize, String>(i) {
+                v
+            } else if let Ok(v) = row.get::<usize, i64>(i) {
+                v.to_string()
+            } else if let Ok(v) = row.get::<usize, f64>(i) {
+                v.to_string()
+            } else if let Ok(v) = row.get::<usize, Vec<u8>>(i) {
+                // blob
+                hex::encode(v)
+            } else if let Ok(v) = row.get::<usize, Option<String>>(i) {
+                v.unwrap_or_default()
+            } else {
+                "<unhandled>".to_string()
+            };
+            map.insert(col.clone(), value);
+        }
+        results.push(map);
+    }
+
+    Ok(Json(results))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -35,6 +136,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start the Axum server
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+
+    // Build HTTP router
+    let app_state = AppState {
+        database: database.clone(),
+    };
+    let app = Router::new()
+        .route("/query", get(query_handler))
+        .with_state(app_state);
+
+    // Spawn HTTP server in background
+    let server = axum::serve(listener, app);
+    tokio::spawn(async move {
+        if let Err(e) = server.await {
+            eprintln!("HTTP server error: {}", e);
+        }
+    });
 
     println!("Starting agglayer-indexer");
 

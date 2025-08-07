@@ -30,6 +30,7 @@ clap = { version = "4.0", features = ["derive"] }
 
 duckdb = { version = "1.2.1", features = ["bundled"] }
 sha2 = "0.10.8"
+hex = "0.4"
 
 axum = "0.8.1"
 

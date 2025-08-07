@@ -1885,6 +1885,7 @@ dependencies = [
  "eyre",
  "futures",
  "futures-util",
+ "hex",
  "serde",
  "serde_json",
  "sha2",
