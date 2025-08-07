@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  daggboard:
+    build: .
+    container_name: daggboard
+    environment:
+      # Provide your own RPC URL; you can override this on the command-line or in an .env file
+      - RPC_URL=https://mainnet.infura.io/v3/YOUR_KEY
+    command: ["daggboard", "--rpc-url", "${RPC_URL}"]
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persist DuckDB database between runs
+      - ./data.duckdb:/app/data.duckdb
+    restart: unless-stopped
