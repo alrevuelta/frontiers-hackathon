@@ -1,0 +1,233 @@
+import { ethers } from 'ethers';
+
+export interface TokenMetadata {
+  name: string;
+  symbol: string;
+  decimals?: number;
+}
+
+/**
+ * Format a token amount for display
+ */
+export function formatTokenAmount(
+  amount: string | number | bigint,
+  decimals: number = 18,
+  precision: number = 4
+): string {
+  try {
+    const amountBN = BigInt(amount.toString());
+    const divisor = BigInt(10 ** decimals);
+    
+    if (amountBN === BigInt(0)) return '0';
+    
+    const whole = amountBN / divisor;
+    const remainder = amountBN % divisor;
+    
+    if (remainder === BigInt(0)) {
+      return whole.toLocaleString();
+    }
+    
+    const decimal = Number(remainder) / Number(divisor);
+    const wholeStr = whole.toLocaleString();
+    const decimalStr = decimal.toFixed(precision).substring(2);
+    
+    return `${wholeStr}.${decimalStr}`;
+  } catch (error) {
+    console.error('Error formatting token amount:', error);
+    return amount.toString();
+  }
+}
+
+/**
+ * Format a large number with K, M, B suffixes
+ */
+export function formatCompactNumber(num: number): string {
+  if (num === 0) return '0';
+  
+  const abs = Math.abs(num);
+  const sign = num < 0 ? '-' : '';
+  
+  if (abs >= 1e9) {
+    return `${sign}${(abs / 1e9).toFixed(1)}B`;
+  } else if (abs >= 1e6) {
+    return `${sign}${(abs / 1e6).toFixed(1)}M`;
+  } else if (abs >= 1e3) {
+    return `${sign}${(abs / 1e3).toFixed(1)}K`;
+  } else {
+    return num.toLocaleString();
+  }
+}
+
+/**
+ * Parse metadata hex string to extract token information
+ */
+export function parseTokenMetadata(metadataHex: string): TokenMetadata {
+  try {
+    if (!metadataHex || metadataHex === '0x') {
+      return { name: 'Unknown Token', symbol: 'UNKNOWN' };
+    }
+    
+    // Remove '0x' prefix
+    const hex = metadataHex.startsWith('0x') ? metadataHex.slice(2) : metadataHex;
+    
+    if (hex.length === 0) {
+      return { name: 'Unknown Token', symbol: 'UNKNOWN' };
+    }
+    
+    // Try to decode as ABI encoded string tuple (name, symbol)
+    try {
+      const decoded = ethers.AbiCoder.defaultAbiCoder().decode(['string', 'string'], '0x' + hex);
+      return {
+        name: decoded[0] || 'Unknown Token',
+        symbol: decoded[1] || 'UNKNOWN',
+      };
+    } catch {
+      // If ABI decoding fails, try simple hex to string conversion
+      try {
+        const bytes = Buffer.from(hex, 'hex');
+        const text = bytes.toString('utf8').replace(/\0/g, '');
+        
+        if (text.length > 0) {
+          // Try to split by common separators
+          const parts = text.split(/[,;|]/);
+          if (parts.length >= 2) {
+            return {
+              name: parts[0].trim() || 'Unknown Token',
+              symbol: parts[1].trim() || 'UNKNOWN',
+            };
+          } else {
+            return {
+              name: text.trim() || 'Unknown Token',
+              symbol: 'UNKNOWN',
+            };
+          }
+        }
+      } catch {
+        // Ignore hex parsing errors
+      }
+    }
+    
+    return { name: 'Unknown Token', symbol: 'UNKNOWN' };
+  } catch (error) {
+    console.error('Error parsing token metadata:', error);
+    return { name: 'Unknown Token', symbol: 'UNKNOWN' };
+  }
+}
+
+/**
+ * Shorten an Ethereum address for display
+ */
+export function shortenAddress(address: string, chars: number = 4): string {
+  if (!address) return '';
+  if (address.length <= 2 * chars + 2) return address;
+  
+  return `${address.slice(0, chars + 2)}...${address.slice(-chars)}`;
+}
+
+/**
+ * Format a block number with proper spacing
+ */
+export function formatBlockNumber(blockNumber: number | bigint): string {
+  return blockNumber.toLocaleString();
+}
+
+/**
+ * Calculate percentage with proper formatting
+ */
+export function formatPercentage(value: number, total: number, precision: number = 1): string {
+  if (total === 0) return '0%';
+  const percentage = (value / total) * 100;
+  return `${percentage.toFixed(precision)}%`;
+}
+
+/**
+ * Format timestamp to relative time
+ */
+export function formatRelativeTime(timestamp: number | Date): string {
+  const now = new Date().getTime();
+  const time = typeof timestamp === 'number' ? timestamp : timestamp.getTime();
+  const diff = now - time;
+  
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  
+  if (days > 0) {
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  } else if (hours > 0) {
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  } else if (minutes > 0) {
+    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+  } else {
+    return `${seconds} second${seconds > 1 ? 's' : ''} ago`;
+  }
+}
+
+/**
+ * Get the status indicator emoji and text based on balance difference
+ */
+export function getBalanceStatus(difference: string | number): {
+  emoji: string;
+  text: string;
+  color: string;
+} {
+  const diff = typeof difference === 'string' ? parseFloat(difference) : difference;
+  
+  if (diff > 0) {
+    return {
+      emoji: '✅',
+      text: 'Healthy',
+      color: 'text-green-600',
+    };
+  } else if (diff === 0) {
+    return {
+      emoji: '⚖️',
+      text: 'Balanced',
+      color: 'text-blue-600',
+    };
+  } else {
+    return {
+      emoji: '⚠️',
+      text: 'Undercollateralized',
+      color: 'text-red-600',
+    };
+  }
+}
+
+/**
+ * Get block explorer URL for different networks
+ */
+export function getBlockExplorerUrl(networkId: number, address: string): string {
+  const explorers: Record<number, string> = {
+    0: 'https://etherscan.io',
+    1: 'https://zkevm.polygonscan.com',
+    2: 'https://astar-zkevm.explorer.startale.com',
+    3: 'https://web3.okx.com/en-eu/explorer/xlayer',
+    4: 'https://oev.explorer.api3.org',
+    6: 'https://witnesschain-blockscout.eu-north-2.gateway.fm',
+    8: 'https://blockscout.wirexpaychain.com',
+  };
+  
+  const baseUrl = explorers[networkId] || 'https://etherscan.io';
+  return `${baseUrl}/address/${address}`;
+}
+
+/**
+ * Get network name by ID
+ */
+export function getNetworkName(networkId: number): string {
+  const networks: Record<number, string> = {
+    0: 'Ethereum',
+    1: 'Polygon zkEVM',
+    2: 'Astar zkEVM',
+    3: 'X Layer',
+    4: 'API3 OEV Network',
+    5: 'Unknown Network',
+    6: 'Witness Chain',
+    7: 'Unknown Network',
+    8: 'Wirex Pay Chain',
+  };
+  
+  return networks[networkId] || `Network ${networkId}`;
+}
