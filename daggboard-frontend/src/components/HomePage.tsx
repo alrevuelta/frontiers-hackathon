@@ -28,7 +28,7 @@ export function HomePage() {
     if (blockNumber === -1) {
       return { 
         variant: 'error' as const, 
-        text: 'Endpoint Down', 
+        text: 'Could not sync. Endpoint down', 
         emoji: '🚨',
         priority: 3 // Lowest priority for sorting
       };
@@ -56,10 +56,10 @@ export function HomePage() {
     
     // Fallback for any other case
     return { 
-      variant: 'warning' as const, 
-      text: 'Unknown', 
-      emoji: '❓',
-      priority: 2
+      variant: 'error' as const, 
+      text: 'Could not sync. Endpoint down', 
+      emoji: '🚨',
+      priority: 3
     };
   };
 
@@ -69,7 +69,7 @@ export function HomePage() {
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Daggboard</h1>
-            <p className="text-gray-600">AggLayer Bridge Analytics Dashboard</p>
+            <p className="text-gray-600">AggLayer Bridge Analytics</p>
           </div>
           <Loading text="Loading rollups..." className="py-20" />
         </div>
@@ -83,7 +83,7 @@ export function HomePage() {
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Daggboard</h1>
-            <p className="text-gray-600">AggLayer Bridge Analytics Dashboard</p>
+            <p className="text-gray-600">AggLayer Bridge Analytics</p>
           </div>
           <ErrorMessage message={error} onRetry={refetch} />
         </div>
@@ -92,16 +92,16 @@ export function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-slate-50 to-stone-50">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 shadow-lg">
+      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 shadow-2xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-4xl sm:text-5xl font-bold text-white mb-2">
                 Daggboard
-                <span className="block text-lg sm:text-xl font-normal text-indigo-100 mt-2">
-                  AggLayer Bridge Analytics Dashboard
+                <span className="block text-lg sm:text-xl font-normal text-emerald-100 mt-2">
+                  AggLayer Bridge Analytics
                 </span>
               </h1>
             </div>
@@ -110,7 +110,7 @@ export function HomePage() {
               variant="outline"
               loading={refreshing}
               leftIcon={<RefreshCw className="w-4 h-4" />}
-              className="bg-white/10 border-white/20 text-white hover:bg-white/20 backdrop-blur-sm"
+              className="bg-white/15 border-white/30 text-white hover:bg-white/25 backdrop-blur-sm transition-all duration-300 shadow-lg"
             >
               Refresh Data
             </Button>
@@ -121,28 +121,28 @@ export function HomePage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Overview Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <Card className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-xl border-0 depth-card glow animate-pulse-glow">
+          <Card className="bg-gradient-to-br from-slate-700 to-gray-800 text-white shadow-2xl border-0 depth-card hover:shadow-slate-500/30 hover:scale-105 transition-all duration-500">
             <CardBody>
               <div className="flex items-center">
-                <div className="bg-white/20 p-3 rounded-full mr-4 glass">
-                  <Layers className="w-8 h-8 text-white" />
+                <div className="bg-emerald-500/20 p-3 rounded-xl mr-4 backdrop-blur-sm border border-emerald-400/30 shadow-lg">
+                  <Layers className="w-8 h-8 text-emerald-300" />
                 </div>
                 <div>
-                  <p className="text-blue-100 text-sm font-medium">Total Rollups</p>
+                  <p className="text-gray-300 text-sm font-medium">Total Rollups</p>
                   <p className="text-3xl font-bold text-white">{rollups?.length || 0}</p>
                 </div>
               </div>
             </CardBody>
           </Card>
 
-          <Card className="bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-xl border-0 depth-card glow-green">
+          <Card className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-2xl border-0 depth-card hover:shadow-emerald-500/30 hover:scale-105 transition-all duration-500">
             <CardBody>
               <div className="flex items-center">
-                <div className="bg-white/20 p-3 rounded-full mr-4 glass">
+                <div className="bg-white/20 p-3 rounded-xl mr-4 backdrop-blur-sm border border-white/30 shadow-lg">
                   <Activity className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                  <p className="text-green-100 text-sm font-medium">Bridge Events</p>
+                  <p className="text-emerald-100 text-sm font-medium">Bridge Events</p>
                   <p className="text-3xl font-bold text-white">
                     {countsLoading ? <Loading size="sm" /> : bridgeCount.toLocaleString()}
                   </p>
@@ -151,14 +151,14 @@ export function HomePage() {
             </CardBody>
           </Card>
 
-          <Card className="bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-xl border-0 depth-card glow-pink">
+          <Card className="bg-gradient-to-br from-orange-500 to-red-600 text-white shadow-2xl border-0 depth-card hover:shadow-orange-500/30 hover:scale-105 transition-all duration-500">
             <CardBody>
               <div className="flex items-center">
-                <div className="bg-white/20 p-3 rounded-full mr-4 glass">
+                <div className="bg-white/20 p-3 rounded-xl mr-4 backdrop-blur-sm border border-white/30 shadow-lg">
                   <Database className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                  <p className="text-purple-100 text-sm font-medium">Claim Events</p>
+                  <p className="text-orange-100 text-sm font-medium">Claim Events</p>
                   <p className="text-3xl font-bold text-white">
                     {countsLoading ? <Loading size="sm" /> : claimCount.toLocaleString()}
                   </p>
@@ -170,10 +170,10 @@ export function HomePage() {
 
         {/* Rollup Overview Tables */}
         <div className="grid grid-cols-1 gap-6 mb-8">
-          <Card className="shadow-xl border-0 bg-gradient-to-br from-white to-gray-50 depth-card gradient-border">
-            <CardHeader className="colorful-table-header rounded-t-xl animate-gradient-x">
-              <h3 className="text-lg font-semibold text-shadow">Rollup Networks Overview</h3>
-              <p className="text-purple-100 text-sm">Current status and sync information</p>
+          <Card className="shadow-2xl border-0 bg-white depth-card overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-slate-800 to-gray-900 text-white">
+              <h3 className="text-lg font-semibold">Rollup Networks Overview</h3>
+              <p className="text-slate-300 text-sm">Current status and sync information</p>
             </CardHeader>
             <CardBody className="p-0">
               {loading ? (
@@ -187,18 +187,18 @@ export function HomePage() {
                   <p className="text-sm mt-2">Waiting for database initialization...</p>
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-b-xl">
+                <div className="overflow-hidden">
                   <table className="w-full">
-                    <thead className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white">
+                    <thead className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Network</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">ID</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Latest Block</th>
-                        <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-4 text-right text-xs font-bold text-white uppercase tracking-wider">Actions</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">Network</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">ID</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">Latest Block</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-4 text-right text-xs font-semibold text-white uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white divide-y divide-gray-100">
                       {rollups
                         .map((rollup) => ({
                           ...rollup,
@@ -219,16 +219,16 @@ export function HomePage() {
                         const { syncStatus, networkName } = rollup;
                         
                         return (
-                          <tr key={rollup.rollup_id} className="hover:bg-gray-50 transition-colors">
+                          <tr key={rollup.rollup_id} className="hover:bg-emerald-50/50 transition-all duration-200 hover:shadow-sm">
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="font-medium text-gray-900">{networkName}</div>
+                              <div className="font-semibold text-gray-900">{networkName}</div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
                                 #{rollup.rollup_id}
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
                               {rollup.latest_bridge_synced_block 
                                 ? formatBlockNumber(rollup.latest_bridge_synced_block)
                                 : 'Not synced'
@@ -245,6 +245,7 @@ export function HomePage() {
                                 variant="outline"
                                 size="sm"
                                 rightIcon={<ChevronRight className="w-4 h-4" />}
+                                className="hover:bg-emerald-100 hover:border-emerald-300 transition-colors duration-200"
                               >
                                 View Details
                               </Button>
