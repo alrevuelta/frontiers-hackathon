@@ -13,5 +13,5 @@ services:
       - "3000:3000"
     volumes:
       # Persist DuckDB database between runs
-      - ./data.duckdb:/app/data.duckdb
+      - ./data.duckdb:/data.duckdb
     restart: unless-stopped
