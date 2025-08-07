@@ -21,6 +21,8 @@ use hex;
 use serde::Deserialize;
 use std::collections::HashMap;
 
+mod api;
+
 #[derive(Parser)]
 #[command(name = "daggboard")]
 #[command(about = "daggboard", long_about = None)]
@@ -134,25 +136,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize the database connection
     let database = Database::new(false).await?;
 
-    // Start the Axum server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-
-    // Build HTTP router
-    let app_state = AppState {
-        database: database.clone(),
-    };
-    let app = Router::new()
-        .route("/query", get(query_handler))
-        .with_state(app_state);
-
-    // Spawn HTTP server in background
-    let server = axum::serve(listener, app);
-    tokio::spawn(async move {
-        if let Err(e) = server.await {
-            eprintln!("HTTP server error: {}", e);
-        }
-    });
-
     println!("Starting agglayer-indexer");
 
     // Use the rpc_url from the command line arguments
@@ -245,6 +228,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
+
+    // ---- HTTP server (initialized after indexers are ready)
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+
+    let app_state = AppState {
+        database: database.clone(),
+    };
+    let query_router = Router::new()
+        .route("/query", get(query_handler))
+        .with_state(app_state);
+
+    let api_router = api::create_router(database.db().clone(), indexers.clone());
+    let app = query_router.merge(api_router);
+
+    let server = axum::serve(listener, app);
+    tokio::spawn(async move {
+        if let Err(e) = server.await {
+            eprintln!("HTTP server error: {}", e);
+        }
+    });
 
     tokio::signal::ctrl_c()
         .await
