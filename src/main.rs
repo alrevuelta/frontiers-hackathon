@@ -170,7 +170,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut name;
 
     let mut indexers = Vec::new();
-    for rollup_id in 0..rollup_count {
+    for rollup_id in 0..=rollup_count {
         // We consider rollup 0 as layer 1
         //if rollup_id != 3 && rollup_id != 1 {
         //    continue; // only index okex
