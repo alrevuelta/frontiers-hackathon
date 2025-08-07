@@ -7,7 +7,8 @@ services:
     environment:
       # Provide your own RPC URL; you can override this on the command-line or in an .env file
       - RPC_URL=https://mainnet.infura.io/v3/YOUR_KEY
-    command: ["daggboard", "--rpc-url", "${RPC_URL}"]
+    # Use shell-form command so ${RPC_URL} env var is expanded
+    command: bash -c "daggboard --rpc-url \"$RPC_URL\""
     ports:
       - "3000:3000"
     volumes:
