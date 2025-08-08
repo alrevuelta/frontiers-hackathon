@@ -11,13 +11,28 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import type { TokenStats } from '../../utils/database';
+import type { TokenStats } from '../../utils/api';
 import { formatTokenAmount, shortenAddress } from '../../utils/formatting';
 
 export interface BalanceChartProps {
   data: TokenStats[];
   type?: 'bar' | 'pie';
   height?: number;
+}
+
+interface TooltipPayload {
+  payload: {
+    fullAddress: string;
+    assets: number;
+    liabilities: number;
+    difference: number;
+    isBalanced: boolean;
+  };
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
 }
 
 export function BalanceChart({ data, type = 'bar', height = 300 }: BalanceChartProps) {
@@ -39,7 +54,7 @@ export function BalanceChart({ data, type = 'bar', height = 300 }: BalanceChartP
     isBalanced: token.is_balanced,
   })).slice(0, 10); // Show top 10 tokens
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (

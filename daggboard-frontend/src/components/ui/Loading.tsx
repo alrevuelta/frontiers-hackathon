@@ -4,17 +4,23 @@ export interface LoadingProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   text?: string;
+  inline?: boolean;
 }
 
-export function Loading({ size = 'md', className = '', text }: LoadingProps) {
+export function Loading({ size = 'md', className = '', text, inline = false }: LoadingProps) {
   const sizeClasses = {
     sm: 'w-4 h-4',
     md: 'w-6 h-6',
     lg: 'w-8 h-8',
   };
 
+  const Container = inline ? 'span' : 'div';
+  const containerClasses = inline 
+    ? `inline-flex items-center ${className}`
+    : `flex items-center justify-center ${className}`;
+
   return (
-    <div className={`flex items-center justify-center ${className}`}>
+    <Container className={containerClasses}>
       <svg
         className={`animate-spin ${sizeClasses[size]} text-primary-600`}
         fill="none"
@@ -35,7 +41,7 @@ export function Loading({ size = 'md', className = '', text }: LoadingProps) {
         />
       </svg>
       {text && <span className="ml-2 text-gray-600">{text}</span>}
-    </div>
+    </Container>
   );
 }
 

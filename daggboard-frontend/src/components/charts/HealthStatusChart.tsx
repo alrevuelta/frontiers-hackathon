@@ -11,12 +11,36 @@ import {
   YAxis,
   CartesianGrid,
 } from 'recharts';
-import type { TokenStats } from '../../utils/database';
+import type { TokenStats } from '../../utils/api';
 
 export interface HealthStatusChartProps {
   data: TokenStats[];
   type?: 'pie' | 'bar';
   height?: number;
+}
+
+interface PieTooltipPayload {
+  name: string;
+  value: number;
+  payload: {
+    percentage: number;
+  };
+}
+
+interface PieTooltipProps {
+  active?: boolean;
+  payload?: PieTooltipPayload[];
+}
+
+interface BarTooltipPayload {
+  count: number;
+  percentage: number;
+}
+
+interface BarTooltipProps {
+  active?: boolean;
+  payload?: { payload: BarTooltipPayload }[];
+  label?: string;
 }
 
 export function HealthStatusChart({ data, type = 'pie', height = 300 }: HealthStatusChartProps) {
@@ -35,7 +59,7 @@ export function HealthStatusChart({ data, type = 'pie', height = 300 }: HealthSt
   const undercollateralized = data.filter(token => parseFloat(token.difference) < 0).length;
   const perfectlyBalanced = data.filter(token => parseFloat(token.difference) === 0).length;
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: PieTooltipProps) => {
     if (active && payload && payload.length) {
       const data = payload[0];
       return (
@@ -115,7 +139,7 @@ export function HealthStatusChart({ data, type = 'pie', height = 300 }: HealthSt
     },
   ];
 
-  const BarTooltip = ({ active, payload, label }: any) => {
+  const BarTooltip = ({ active, payload, label }: BarTooltipProps) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (

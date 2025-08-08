@@ -35,10 +35,21 @@ export function RollupDetailPage() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    refetchRollup();
-    refetchStats();
-    refetchCounts();
-    setTimeout(() => setRefreshing(false), 1500);
+    try {
+      // Trigger rollup-specific sync endpoint first, then refresh data
+      await fetch(`/api/sync/${rollupIdNum}`, { method: 'POST' });
+      await new Promise(resolve => setTimeout(resolve, 500)); // Wait a bit for sync to process
+      refetchRollup();
+      refetchStats();
+      refetchCounts();
+    } catch (error) {
+      console.error('Failed to sync:', error);
+      refetchRollup();
+      refetchStats();
+      refetchCounts();
+    } finally {
+      setTimeout(() => setRefreshing(false), 1500);
+    }
   };
 
   const handleBack = () => {
@@ -133,9 +144,9 @@ export function RollupDetailPage() {
             <CardBody className="text-center">
               <Database className="w-8 h-8 text-white mx-auto mb-2" />
               <p className="text-emerald-100 text-xs font-medium mb-1">Bridge Events</p>
-              <p className="text-lg font-bold text-white">
+              <div className="text-lg font-bold text-white">
                 {countsLoading ? <Loading size="sm" /> : bridgeCount.toLocaleString()}
-              </p>
+              </div>
             </CardBody>
           </Card>
 
@@ -143,9 +154,9 @@ export function RollupDetailPage() {
             <CardBody className="text-center">
               <Coins className="w-8 h-8 text-white mx-auto mb-2" />
               <p className="text-orange-100 text-xs font-medium mb-1">Claim Events</p>
-              <p className="text-lg font-bold text-white">
+              <div className="text-lg font-bold text-white">
                 {countsLoading ? <Loading size="sm" /> : claimCount.toLocaleString()}
-              </p>
+              </div>
             </CardBody>
           </Card>
 
@@ -153,9 +164,9 @@ export function RollupDetailPage() {
             <CardBody className="text-center">
               <AlertTriangle className="w-8 h-8 text-white mx-auto mb-2" />
               <p className="text-blue-100 text-xs font-medium mb-1">Total Tokens</p>
-              <p className="text-lg font-bold text-white">
+              <div className="text-lg font-bold text-white">
                 {statsLoading ? <Loading size="sm" /> : (tokenStats?.length || 0)}
-              </p>
+              </div>
             </CardBody>
           </Card>
         </div>

@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@duckdb/duckdb-wasm": "^1.29.1-dev132.0",
     "@types/react-router-dom": "^5.3.3",
     "ethers": "^6.15.0",
     "lucide-react": "^0.537.0",

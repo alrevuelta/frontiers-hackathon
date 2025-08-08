@@ -4,6 +4,7 @@ import { Activity, Database, Layers, RefreshCw, ChevronRight } from 'lucide-reac
 import { useRollups, useEventCounts } from '../hooks/useDatabase';
 import { Card, CardHeader, CardBody, Button, Badge, Loading, ErrorMessage } from './ui';
 import { formatBlockNumber, getNetworkName } from '../utils/formatting';
+import { type Rollup } from '../utils/api';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -13,15 +14,24 @@ export function HomePage() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    refetch();
-    setTimeout(() => setRefreshing(false), 1000);
+    try {
+      // Trigger general sync endpoint first, then refresh data
+      await fetch('/sync', { method: 'POST' });
+      await new Promise(resolve => setTimeout(resolve, 500)); // Wait a bit for sync to process
+      refetch();
+    } catch (error) {
+      console.error('Failed to sync:', error);
+      refetch(); // Still try to refresh even if sync fails
+    } finally {
+      setTimeout(() => setRefreshing(false), 1000);
+    }
   };
 
   const handleRollupClick = (rollupId: number) => {
     navigate(`/rollup/${rollupId}`);
   };
 
-  const getSyncStatus = (rollup: any) => {
+  const getSyncStatus = (rollup: Rollup) => {
     const blockNumber = rollup.latest_bridge_synced_block;
     
     // Handle -1 as endpoint down
@@ -68,7 +78,7 @@ export function HomePage() {
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Daggboard</h1>
+            <h1 className="text-3xl font-bold text-gray-900">dAggBoard</h1>
             <p className="text-gray-600">AggLayer Bridge Analytics</p>
           </div>
           <Loading text="Loading rollups..." className="py-20" />
@@ -82,7 +92,7 @@ export function HomePage() {
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Daggboard</h1>
+            <h1 className="text-3xl font-bold text-gray-900">dAggBoard</h1>
             <p className="text-gray-600">AggLayer Bridge Analytics</p>
           </div>
           <ErrorMessage message={error} onRetry={refetch} />
@@ -99,7 +109,7 @@ export function HomePage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-4xl sm:text-5xl font-bold text-white mb-2">
-                Daggboard
+                dAggBoard
                 <span className="block text-lg sm:text-xl font-normal text-emerald-100 mt-2">
                   AggLayer Bridge Analytics
                 </span>
@@ -143,9 +153,9 @@ export function HomePage() {
                 </div>
                 <div>
                   <p className="text-emerald-100 text-sm font-medium">Bridge Events</p>
-                  <p className="text-3xl font-bold text-white">
+                  <div className="text-3xl font-bold text-white">
                     {countsLoading ? <Loading size="sm" /> : bridgeCount.toLocaleString()}
-                  </p>
+                  </div>
                 </div>
               </div>
             </CardBody>
@@ -159,9 +169,9 @@ export function HomePage() {
                 </div>
                 <div>
                   <p className="text-orange-100 text-sm font-medium">Claim Events</p>
-                  <p className="text-3xl font-bold text-white">
+                  <div className="text-3xl font-bold text-white">
                     {countsLoading ? <Loading size="sm" /> : claimCount.toLocaleString()}
-                  </p>
+                  </div>
                 </div>
               </div>
             </CardBody>
@@ -180,7 +190,7 @@ export function HomePage() {
                 <div className="p-8">
                   <Loading text="Loading rollup data..." />
                 </div>
-              ) : !rollups || rollups.length === 0 ? (
+              ) : !rollups || !Array.isArray(rollups) || rollups.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
                   <Database className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                   <p>No rollup data available yet</p>
@@ -199,7 +209,7 @@ export function HomePage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
-                      {rollups
+                      {(rollups || [])
                         .map((rollup) => ({
                           ...rollup,
                           syncStatus: getSyncStatus(rollup),

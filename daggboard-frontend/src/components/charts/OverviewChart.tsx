@@ -11,13 +11,36 @@ import {
   Pie,
   Legend,
 } from 'recharts';
-import type { Rollup } from '../../utils/database';
+import type { Rollup } from '../../utils/api';
 import { formatBlockNumber, getNetworkName } from '../../utils/formatting';
 
 export interface OverviewChartProps {
   rollups: Rollup[];
   type?: 'sync-status' | 'network-distribution';
   height?: number;
+}
+
+interface NetworkTooltipPayload {
+  name: string;
+  rollupId: number;
+  isSynced: boolean;
+}
+
+interface NetworkTooltipProps {
+  active?: boolean;
+  payload?: { payload: NetworkTooltipPayload }[];
+}
+
+interface SyncTooltipPayload {
+  name: string;
+  rollupId: number;
+  blockNumber: number;
+  isSynced: boolean;
+}
+
+interface SyncTooltipProps {
+  active?: boolean;
+  payload?: { payload: SyncTooltipPayload }[];
 }
 
 export function OverviewChart({ rollups, type = 'sync-status', height = 300 }: OverviewChartProps) {
@@ -43,7 +66,7 @@ export function OverviewChart({ rollups, type = 'sync-status', height = 300 }: O
       '#14b8a6', '#f97316', '#a855f7', '#059669'
     ];
 
-    const CustomTooltip = ({ active, payload }: any) => {
+    const CustomTooltip = ({ active, payload }: NetworkTooltipProps) => {
       if (active && payload && payload.length) {
         const data = payload[0].payload;
         return (
@@ -101,7 +124,7 @@ export function OverviewChart({ rollups, type = 'sync-status', height = 300 }: O
     };
   }).sort((a, b) => b.blockNumber - a.blockNumber);
 
-  const CustomSyncTooltip = ({ active, payload }: any) => {
+  const CustomSyncTooltip = ({ active, payload }: SyncTooltipProps) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
