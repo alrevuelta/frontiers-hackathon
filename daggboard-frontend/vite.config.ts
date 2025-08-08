@@ -7,30 +7,11 @@ export default defineConfig({
   base: "/",
   server: {
     proxy: {
-      '/table': {
+      '/api': {
         target: 'http://65.21.69.162:3000',
         changeOrigin: true,
         secure: false,
-      },
-      '/bridge_balance': {
-        target: 'http://65.21.69.162:3000',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/wrapped_balance': {
-        target: 'http://65.21.69.162:3000',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/sync': {
-        target: 'http://65.21.69.162:3000',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/query': {
-        target: 'http://65.21.69.162:3000',
-        changeOrigin: true,
-        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
       }
     }
   }

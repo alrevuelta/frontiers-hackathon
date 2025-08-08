@@ -1,12 +1,12 @@
 // API service for backend integration
-// Use relative URLs that will be proxied by Vite to avoid CORS issues
+// Use /api prefix for clean generic rewrite rule
 const ENDPOINTS = {
-  ROLLUPS: '/table/rollups',
-  WRAPPED_TOKENS: '/table/new_wrapped_token_events/filter',
-  ASSET_BALANCE: '/bridge_balance',
-  LIABILITY_BALANCE: '/wrapped_balance',
-  SYNC: '/sync',
-  QUERY: '/query',
+  ROLLUPS: '/api/table/rollups',
+  WRAPPED_TOKENS: '/api/table/new_wrapped_token_events/filter',
+  ASSET_BALANCE: '/api/bridge_balance',
+  LIABILITY_BALANCE: '/api/wrapped_balance',
+  SYNC: '/api/sync',
+  QUERY: '/api/query',
 } as const;
 
 // Types based on the schema provided
@@ -126,11 +126,19 @@ class ApiService {
           'Content-Type': 'application/json',
           ...options?.headers,
         },
+        mode: 'cors',
         ...options,
       });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text.substring(0, 200));
+        throw new Error('Server returned non-JSON response (likely HTML error page)');
       }
 
       const data = await response.json();
