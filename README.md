@@ -3,12 +3,14 @@
 `dAggBoard` is a dashboard for Polygon's [AggLayer](https://www.agglayer.dev/), a cross-chain settlement layer that connects the liquidity and users of any blockchain, enabling fast, low-cost interoperability and growth.
 
 It consists of:
-* A backend written in **Rust** using **Alloy** to index all connected AggChains in real time. It stores the data in a **DuckDB** database and indexes all the events that happen in all AggChains connected to the Agglayer.
+* A backend indexer written in **Rust** using **Alloy** to index all connected AggChains in real time. It stores the data in a **DuckDB** database and indexes all the events that happen in all AggChains connected to the Agglayer.
 * A frontend that visualises bridges, claims, statistics, and more.
 
-Built during **Frontiers 2025** in San Francisco. This is a hack-athon prototype: untested and *not* intended for production use.
+Built during **Frontiers 2025** in San Francisco. This is a hackathon prototype: untested and *not* intended for production use.
 
+Frontend deployment: https://frontiers-hackathon.vercel.app/
 
+Alternate frontend deployment: https://daggboard.vercel.app/
 
 ## run backend
 
