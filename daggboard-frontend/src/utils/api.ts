@@ -365,7 +365,7 @@ WITH flows AS (
 
     /* Incoming transactions: events whose destination is the chosen rollup */
     SELECT rollup_id        AS source,
-           destinationNetwork AS target
+           ${rollupId}      AS target
     FROM   bridge_events
     WHERE  destinationNetwork = ${rollupId}
 )

@@ -239,7 +239,7 @@ export function RollupDetailPage() {
               <div className="w-full">
                 <ErrorBoundary>
                   <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <SankeyChart height={500} />
+                    <SankeyChart data={flowData} rollupId={rollupIdNum} height={500} />
                   </div>
                 </ErrorBoundary>
               </div>
