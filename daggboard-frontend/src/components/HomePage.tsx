@@ -1,27 +1,25 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, Database, Layers, RefreshCw, ChevronRight } from 'lucide-react';
-import { useRollups, useEventCounts } from '../hooks/useDatabase';
-import { Card, CardHeader, CardBody, Button, Badge, Loading, ErrorMessage } from './ui';
+import { useRollups, useEventCounts, useSyncDistances } from '../hooks/useApi';
+import { Card, CardHeader, CardBody, Button, Loading, ErrorMessage } from './ui';
 import { formatBlockNumber, getNetworkName } from '../utils/formatting';
-import { type Rollup } from '../utils/api';
 
 export function HomePage() {
   const navigate = useNavigate();
   const { data: rollups, loading, error, refetch } = useRollups();
   const { bridgeCount, claimCount, loading: countsLoading } = useEventCounts();
+  const { distances, loadingStates, refetch: refetchDistances } = useSyncDistances(rollups || []);
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      // Trigger general sync endpoint first, then refresh data
-      await fetch('/sync', { method: 'POST' });
-      await new Promise(resolve => setTimeout(resolve, 500)); // Wait a bit for sync to process
+      // Just refresh the data without triggering sync
       refetch();
+      refetchDistances();
     } catch (error) {
-      console.error('Failed to sync:', error);
-      refetch(); // Still try to refresh even if sync fails
+      console.error('Failed to refresh:', error);
     } finally {
       setTimeout(() => setRefreshing(false), 1000);
     }
@@ -31,47 +29,6 @@ export function HomePage() {
     navigate(`/rollup/${rollupId}`);
   };
 
-  const getSyncStatus = (rollup: Rollup) => {
-    const blockNumber = rollup.latest_bridge_synced_block;
-    
-    // Handle -1 as endpoint down
-    if (blockNumber === -1) {
-      return { 
-        variant: 'error' as const, 
-        text: 'Could not sync. Endpoint down', 
-        emoji: '🚨',
-        priority: 3 // Lowest priority for sorting
-      };
-    }
-    
-    // Handle null, 0, or undefined as not synced
-    if (!blockNumber || blockNumber === 0) {
-      return { 
-        variant: 'warning' as const, 
-        text: 'Not Synced', 
-        emoji: '❌',
-        priority: 2
-      };
-    }
-    
-    // Handle positive numbers as synced
-    if (blockNumber > 0) {
-      return { 
-        variant: 'success' as const, 
-        text: 'Synced', 
-        emoji: '✅',
-        priority: 1 // Highest priority for sorting
-      };
-    }
-    
-    // Fallback for any other case
-    return { 
-      variant: 'error' as const, 
-      text: 'Could not sync. Endpoint down', 
-      emoji: '🚨',
-      priority: 3
-    };
-  };
 
   if (loading) {
     return (
@@ -204,29 +161,30 @@ export function HomePage() {
                         <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">Network</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">ID</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">Latest Block</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">Distance from Head</th>
                         <th className="px-6 py-4 text-right text-xs font-semibold text-white uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
                       {(rollups || [])
-                        .map((rollup) => ({
-                          ...rollup,
-                          syncStatus: getSyncStatus(rollup),
-                          networkName: rollup.network_name || getNetworkName(rollup.rollup_id)
-                        }))
                         .sort((a, b) => {
-                          // Sort by sync status priority first (1 = synced, 2 = not synced, 3 = endpoint down)
-                          if (a.syncStatus.priority !== b.syncStatus.priority) {
-                            return a.syncStatus.priority - b.syncStatus.priority;
-                          }
-                          // Within same priority, sort by block number descending
+                          // First handle -1 (endpoint down) - put them at the end
+                          const aEndpointDown = a.latest_bridge_synced_block === -1;
+                          const bEndpointDown = b.latest_bridge_synced_block === -1;
+                          
+                          if (aEndpointDown && !bEndpointDown) return 1; // a goes to end
+                          if (!aEndpointDown && bEndpointDown) return -1; // b goes to end
+                          if (aEndpointDown && bEndpointDown) return 0; // both equal
+                          
+                          // Then sort by block number descending for healthy rollups
                           const blockA = a.latest_bridge_synced_block || 0;
                           const blockB = b.latest_bridge_synced_block || 0;
                           return Number(blockB) - Number(blockA);
                         })
                         .map((rollup) => {
-                        const { syncStatus, networkName } = rollup;
+                        const networkName = rollup.network_name || getNetworkName(rollup.rollup_id);
+                        const distance = distances.get(rollup.rollup_id);
+                        const isEndpointDown = rollup.latest_bridge_synced_block === -1;
                         
                         return (
                           <tr key={rollup.rollup_id} className="hover:bg-emerald-50/50 transition-all duration-200 hover:shadow-sm">
@@ -239,15 +197,26 @@ export function HomePage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
-                              {rollup.latest_bridge_synced_block 
-                                ? formatBlockNumber(rollup.latest_bridge_synced_block)
-                                : 'Not synced'
-                              }
+                              {isEndpointDown ? (
+                                <span className="text-red-600 font-medium">Could not sync. Endpoint down</span>
+                              ) : rollup.latest_bridge_synced_block ? (
+                                formatBlockNumber(rollup.latest_bridge_synced_block)
+                              ) : (
+                                'Not synced'
+                              )}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <Badge variant={syncStatus.variant} size="sm">
-                                {syncStatus.emoji} {syncStatus.text}
-                              </Badge>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
+                              {isEndpointDown ? (
+                                <span className="text-red-600">🚨 Endpoint down</span>
+                              ) : distance !== undefined ? (
+                                <span className={`${distance === 0 ? 'text-emerald-600 font-semibold' : distance < 100 ? 'text-amber-600' : 'text-red-600'}`}>
+                                  {distance === 0 ? '✅ Synced' : `${distance} blocks`}
+                                </span>
+                              ) : loadingStates.get(rollup.rollup_id) ? (
+                                <Loading size="sm" />
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right">
                               <Button

@@ -12,7 +12,7 @@ import {
   Coins,
   AlertTriangle,
 } from 'lucide-react';
-import { useRollup, useTokenStats, useEventCounts } from '../hooks/useDatabase';
+import { useRollup, useTokenStats, useEventCounts, useSyncDistance } from '../hooks/useApi';
 import { Card, CardHeader, CardBody, Button, Badge, Loading, ErrorMessage } from './ui';
 import {
   formatTokenAmount,
@@ -32,21 +32,18 @@ export function RollupDetailPage() {
   const { data: rollup, loading: rollupLoading, error: rollupError, refetch: refetchRollup } = useRollup(rollupIdNum);
   const { data: tokenStats, loading: statsLoading, error: statsError, refetch: refetchStats } = useTokenStats(rollupIdNum);
   const { bridgeCount, claimCount, loading: countsLoading, refetch: refetchCounts } = useEventCounts(rollupIdNum);
+  const { data: syncDistance, loading: syncDistanceLoading, refetch: refetchSyncDistance } = useSyncDistance(rollupIdNum);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      // Trigger rollup-specific sync endpoint first, then refresh data
-      await fetch(`/api/sync/${rollupIdNum}`, { method: 'POST' });
-      await new Promise(resolve => setTimeout(resolve, 500)); // Wait a bit for sync to process
+      // Just refresh the data without triggering sync
       refetchRollup();
       refetchStats();
       refetchCounts();
+      refetchSyncDistance();
     } catch (error) {
-      console.error('Failed to sync:', error);
-      refetchRollup();
-      refetchStats();
-      refetchCounts();
+      console.error('Failed to refresh:', error);
     } finally {
       setTimeout(() => setRefreshing(false), 1500);
     }
@@ -126,7 +123,7 @@ export function RollupDetailPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Overview Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mb-8">
           <Card className="bg-gradient-to-br from-slate-700 to-gray-800 text-white shadow-xl border-0 depth-card hover:shadow-slate-500/30 hover:scale-105 transition-all duration-500">
             <CardBody className="text-center">
               <Activity className="w-8 h-8 text-emerald-300 mx-auto mb-2" />
@@ -137,6 +134,24 @@ export function RollupDetailPage() {
                   : 'Not synced'
                 }
               </p>
+            </CardBody>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-purple-600 to-violet-700 text-white shadow-xl border-0 depth-card hover:shadow-purple-500/30 hover:scale-105 transition-all duration-500">
+            <CardBody className="text-center">
+              <TrendingUp className="w-8 h-8 text-white mx-auto mb-2" />
+              <p className="text-purple-100 text-xs font-medium mb-1">Distance from Head</p>
+              <div className="text-lg font-bold text-white">
+                {syncDistanceLoading ? (
+                  <Loading size="sm" />
+                ) : syncDistance !== null && syncDistance !== undefined ? (
+                  <span className={syncDistance === 0 ? 'text-emerald-300' : syncDistance < 100 ? 'text-amber-300' : 'text-red-300'}>
+                    {syncDistance === 0 ? '✅ Synced' : `${syncDistance} blocks`}
+                  </span>
+                ) : (
+                  'N/A'
+                )}
+              </div>
             </CardBody>
           </Card>
 

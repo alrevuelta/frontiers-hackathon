@@ -80,6 +80,10 @@ export interface ClaimEvent {
   amount: string;
 }
 
+export interface SyncDistance {
+  distance: number;
+}
+
 class ApiService {
   private async request<T>(url: string, options?: RequestInit): Promise<T> {
     try {
@@ -258,6 +262,13 @@ class ApiService {
   async triggerSync(rollupId?: number): Promise<{ success: boolean; message?: string }> {
     const url = rollupId ? `${ENDPOINTS.SYNC}/${rollupId}` : ENDPOINTS.SYNC;
     return this.request(url, { method: 'POST' });
+  }
+
+  // Get sync distance from head for a rollup
+  async getSyncDistance(rollupId: number): Promise<number> {
+    const url = `${ENDPOINTS.SYNC}/${rollupId}`;
+    const response = await this.request<SyncDistance>(url);
+    return response.distance;
   }
 }
 

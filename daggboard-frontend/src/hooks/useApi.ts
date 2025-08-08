@@ -169,3 +169,110 @@ export function useEventCounts(rollupId?: number) {
 
   return { bridgeCount, claimCount, loading, error, refetch };
 }
+
+export function useSyncDistance(rollupId: number): UseDataResult<number> {
+  const [data, setData] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const distance = await apiService.getSyncDistance(rollupId);
+      setData(distance);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch sync distance:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch sync distance');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [rollupId]);
+
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, error, refetch };
+}
+
+export function useSyncDistances(rollups: { rollup_id: number; latest_bridge_synced_block: number | null }[]) {
+  const [distances, setDistances] = useState<Map<number, number>>(new Map());
+  const [loadingStates, setLoadingStates] = useState<Map<number, boolean>>(new Map());
+  const [error, setError] = useState<string | null>(null);
+
+  // Convert rollups to string for stable dependency, excluding -1 latest_bridge_synced_block
+  const validRollupsStr = rollups
+    .filter(r => r.latest_bridge_synced_block !== -1)
+    .map(r => r.rollup_id)
+    .join(',');
+
+  const fetchData = useCallback(async () => {
+    const currentValidRollupIds = validRollupsStr.split(',').filter(id => id).map(Number);
+    
+    if (currentValidRollupIds.length === 0) {
+      setDistances(new Map());
+      setLoadingStates(new Map());
+      return;
+    }
+
+    // Initialize loading states for all valid rollups
+    const initialLoadingStates = new Map();
+    currentValidRollupIds.forEach(rollupId => {
+      initialLoadingStates.set(rollupId, true);
+    });
+    setLoadingStates(initialLoadingStates);
+
+    // Fetch distances individually and update state as each completes
+    currentValidRollupIds.forEach(async (rollupId) => {
+      try {
+        const distance = await apiService.getSyncDistance(rollupId);
+        
+        // Update distances map
+        setDistances(prev => {
+          const newMap = new Map(prev);
+          newMap.set(rollupId, distance);
+          return newMap;
+        });
+
+        // Update loading state for this specific rollup
+        setLoadingStates(prev => {
+          const newMap = new Map(prev);
+          newMap.set(rollupId, false);
+          return newMap;
+        });
+
+        setError(null);
+      } catch (err) {
+        console.error(`Failed to fetch sync distance for rollup ${rollupId}:`, err);
+        
+        // Update loading state for this specific rollup even on error
+        setLoadingStates(prev => {
+          const newMap = new Map(prev);
+          newMap.set(rollupId, false);
+          return newMap;
+        });
+
+        setError(err instanceof Error ? err.message : 'Failed to fetch some sync distances');
+      }
+    });
+  }, [validRollupsStr]);
+
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Check if any rollup is still loading
+  const loading = Array.from(loadingStates.values()).some(isLoading => isLoading);
+
+  return { distances, loadingStates, loading, error, refetch };
+}
