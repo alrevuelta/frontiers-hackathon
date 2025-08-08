@@ -590,6 +590,159 @@ def display_top_bridge_addresses_pie(bridge_events: List[Dict[str, Any]], origin
     fig.update_layout(title_text=f"Top {len(labels)} Bridging Addresses from Chain {origin_chain}")
     st.plotly_chart(fig, use_container_width=True)
 
+# --- Bridge & Claim Counts Pie Charts ---
+@st.cache_data(ttl=300)
+def fetch_bridge_counts() -> List[Dict[str, Any]]:
+    """Return aggregated bridge-event counts per network"""
+    sql = "SELECT rollup_id AS network, COUNT(*) AS bridges FROM bridge_events GROUP BY rollup_id ORDER BY bridges DESC"
+    return run_sql_query(sql)
+
+@st.cache_data(ttl=300)
+def fetch_claim_counts() -> List[Dict[str, Any]]:
+    """Return aggregated claim-event counts per network"""
+    sql = "SELECT rollup_id AS network, COUNT(*) AS claims FROM claim_events GROUP BY rollup_id ORDER BY claims DESC"
+    return run_sql_query(sql)
+
+def display_network_bridge_claim_pies(bridge_counts: List[Dict[str, Any]],
+                                      claim_counts: List[Dict[str, Any]],
+                                      rollups: List[Dict[str, Any]]):
+    """Display two pie charts side-by-side: Bridge events vs Claim events per network."""
+    if not bridge_counts and not claim_counts:
+        st.info("No aggregated bridge/claim data available.")
+        return
+
+    id_to_name = {r.get("rollup_id"): r.get("network_name") for r in rollups}
+
+    # Prepare bridge pie data
+    bridge_labels = [id_to_name.get(int(row["network"]), str(row["network"])) for row in bridge_counts]
+    bridge_values = [int(row["bridges"]) for row in bridge_counts]
+
+    # Prepare claim pie data
+    claim_labels = [id_to_name.get(int(row["network"]), str(row["network"])) for row in claim_counts]
+    claim_values = [int(row["claims"]) for row in claim_counts]
+
+    col_b, col_c = st.columns(2)
+    with col_b:
+        st.markdown("### 🌉 Bridge Events by Network")
+        if bridge_values:
+            fig_b = go.Figure(data=[go.Pie(labels=bridge_labels, values=bridge_values, hole=0.3)])
+            fig_b.update_layout(title_text="Bridge Events Distribution")
+            st.plotly_chart(fig_b, use_container_width=True)
+        else:
+            st.info("No bridge data available")
+
+    with col_c:
+        st.markdown("### 🔖 Claim Events by Network")
+        if claim_values:
+            fig_c = go.Figure(data=[go.Pie(labels=claim_labels, values=claim_values, hole=0.3)])
+            fig_c.update_layout(title_text="Claim Events Distribution")
+            st.plotly_chart(fig_c, use_container_width=True)
+        else:
+            st.info("No claim data available")
+
+# --- Aggregated Bridge Flows (fast Sankey) ---
+
+@st.cache_data(ttl=120)
+def fetch_bridge_flows(chain_id: int) -> List[Dict[str, Any]]:
+    """
+    Fetch aggregated bridge flows for the given chain (both inbound and outbound),
+    returning rows with columns: source (int), target (int), value (count).
+    The query executes completely on the database side and is faster than
+    transferring and post-processing raw events.
+    """
+    sql = (
+        "WITH flows AS ("
+        f" SELECT rollup_id AS source, destinationNetwork AS target "
+        " FROM bridge_events "
+        f" WHERE rollup_id = {chain_id} "
+        " UNION ALL "
+        " SELECT rollup_id AS source, destinationNetwork AS target "
+        " FROM bridge_events "
+        f" WHERE destinationNetwork = {chain_id}"
+        ") "
+        "SELECT source, target, COUNT(*) AS value "
+        "FROM flows "
+        "GROUP BY source, target "
+        "ORDER BY value DESC"
+    )
+    return run_sql_query(sql)
+
+
+def display_bridge_sankey_counts(bridge_flows: List[Dict[str, Any]], rollups: List[Dict[str, Any]], chain_id: int):
+    """Render inbound/outbound Sankey diagrams based on pre-aggregated counts."""
+    if not bridge_flows:
+        st.info("No bridge flow data available.")
+        return
+
+    id_to_name = {r.get("rollup_id"): r.get("network_name") for r in rollups}
+
+    inbound: Dict[int, int] = defaultdict(int)
+    outbound: Dict[int, int] = defaultdict(int)
+
+    for row in bridge_flows:
+        try:
+            src = int(row.get("source")) if row.get("source") is not None else None
+            tgt = int(row.get("target")) if row.get("target") is not None else None
+        except ValueError:
+            continue
+        val = int(row.get("value", 0))
+        if src == chain_id and tgt is not None and tgt != chain_id:
+            outbound[tgt] += val
+        elif tgt == chain_id and src is not None and src != chain_id:
+            inbound[src] += val
+
+    total_in = sum(inbound.values())
+    total_out = sum(outbound.values())
+    chain_label = id_to_name.get(chain_id, f"Network {chain_id}")
+
+    st.markdown(f"### 🔄 Bridge flows for **{chain_label}** (ID {chain_id}) — In: **{total_in}**, Out: **{total_out}**")
+
+    col_in, col_out = st.columns(2)
+
+    # Inbound diagram
+    with col_in:
+        st.caption("Inbound")
+        if inbound:
+            node_ids = sorted(inbound.keys()) + [chain_id]
+            idx = {nid: idx for idx, nid in enumerate(node_ids)}
+            labels = [id_to_name.get(nid, f"Network {nid}") for nid in node_ids]
+            sources = [idx[s] for s in inbound.keys()]
+            targets = [idx[chain_id]] * len(inbound)
+            values = list(inbound.values())
+
+            fig_in = go.Figure(data=[go.Sankey(
+                node=dict(pad=15, thickness=20, line=dict(color="black", width=0.5), label=labels),
+                link=dict(source=sources, target=targets, value=values)
+            )])
+            fig_in.update_layout(margin=dict(l=10, r=10, t=25, b=10),
+                                 title_text=f"Inbound to {chain_label}",
+                                 font_size=10)
+            st.plotly_chart(fig_in, use_container_width=True)
+        else:
+            st.info("No inbound bridges")
+
+    # Outbound diagram
+    with col_out:
+        st.caption("Outbound")
+        if outbound:
+            node_ids = [chain_id] + sorted(outbound.keys())
+            idx = {nid: idx for idx, nid in enumerate(node_ids)}
+            labels = [id_to_name.get(nid, f"Network {nid}") for nid in node_ids]
+            sources = [idx[chain_id]] * len(outbound)
+            targets = [idx[t] for t in outbound.keys()]
+            values = list(outbound.values())
+
+            fig_out = go.Figure(data=[go.Sankey(
+                node=dict(pad=15, thickness=20, line=dict(color="black", width=0.5), label=labels),
+                link=dict(source=sources, target=targets, value=values)
+            )])
+            fig_out.update_layout(margin=dict(l=10, r=10, t=25, b=10),
+                                  title_text=f"Outbound from {chain_label}",
+                                  font_size=10)
+            st.plotly_chart(fig_out, use_container_width=True)
+        else:
+            st.info("No outbound bridges")
+
 # Main app
 def main():
     # Title and description
@@ -606,14 +759,22 @@ def main():
     selected_chain_label = st.selectbox("Select Rollup / Network", list(chain_options.keys()))
     selected_chain_id = chain_options[selected_chain_label]
 
-    # Fetch bridge events for selected chain
-    bridge_events = fetch_bridge_events(selected_chain_id)
+    # Fetch aggregated bridge flows (fast)
+    bridge_flows = fetch_bridge_flows(selected_chain_id)
 
-    # Show Sankey diagrams for the selected chain
-    display_bridge_sankey_inbound_outbound(bridge_events, rollups, selected_chain_id)
+    # Show Sankey diagrams for the selected chain using aggregated counts
+    display_bridge_sankey_counts(bridge_flows, rollups, selected_chain_id)
+
+    # Fetch raw bridge events (limited) for other visualisations
+    bridge_events = fetch_bridge_events(selected_chain_id)
 
     # Pie chart of top bridging addresses from the selected chain
     display_top_bridge_addresses_pie(bridge_events, selected_chain_id)
+
+    # Network-wide bridge & claim counts pies
+    bridge_counts = fetch_bridge_counts()
+    claim_counts = fetch_claim_counts()
+    display_network_bridge_claim_pies(bridge_counts, claim_counts, rollups)
 
     # Latest bridge transactions table (across all networks)
     latest_events = fetch_latest_bridge_events()
