@@ -1,16 +1,22 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, Database, Layers, RefreshCw, ChevronRight } from 'lucide-react';
-import { useRollups, useEventCounts, useSyncDistances } from '../hooks/useApi';
+import { useRollups, useSyncDistances, useBridgeEventCounts, useClaimEventCounts } from '../hooks/useApi';
 import { Card, CardHeader, CardBody, Button, Loading, ErrorMessage } from './ui';
 import { formatBlockNumber, getNetworkName } from '../utils/formatting';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 export function HomePage() {
   const navigate = useNavigate();
   const { data: rollups, loading, error, refetch } = useRollups();
-  const { bridgeCount, claimCount, loading: countsLoading } = useEventCounts();
+  const { data: bridgeEventCounts, loading: bridgeCountsLoading, refetch: refetchBridgeCounts } = useBridgeEventCounts();
+  const { data: claimEventCounts, loading: claimCountsLoading, refetch: refetchClaimCounts } = useClaimEventCounts();
   const { distances, loadingStates, refetch: refetchDistances } = useSyncDistances(rollups || []);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Calculate totals
+  const totalBridgeEvents = (bridgeEventCounts || []).reduce((sum, item) => sum + parseInt(item.bridges), 0);
+  const totalClaimEvents = (claimEventCounts || []).reduce((sum, item) => sum + parseInt(item.claims), 0);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -18,6 +24,8 @@ export function HomePage() {
       // Just refresh the data without triggering sync
       refetch();
       refetchDistances();
+      refetchBridgeCounts();
+      refetchClaimCounts();
     } catch (error) {
       console.error('Failed to refresh:', error);
     } finally {
@@ -111,7 +119,7 @@ export function HomePage() {
                 <div>
                   <p className="text-emerald-100 text-sm font-medium">Bridge Events</p>
                   <div className="text-3xl font-bold text-white">
-                    {countsLoading ? <Loading size="sm" /> : bridgeCount.toLocaleString()}
+                    {bridgeCountsLoading ? <Loading size="sm" /> : totalBridgeEvents.toLocaleString()}
                   </div>
                 </div>
               </div>
@@ -127,10 +135,123 @@ export function HomePage() {
                 <div>
                   <p className="text-orange-100 text-sm font-medium">Claim Events</p>
                   <div className="text-3xl font-bold text-white">
-                    {countsLoading ? <Loading size="sm" /> : claimCount.toLocaleString()}
+                    {claimCountsLoading ? <Loading size="sm" /> : totalClaimEvents.toLocaleString()}
                   </div>
                 </div>
               </div>
+            </CardBody>
+          </Card>
+        </div>
+
+        {/* Distribution Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Bridge Events Distribution */}
+          <Card className="shadow-2xl border-0 bg-white depth-card overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white">
+              <h3 className="text-lg font-semibold">Bridge Events Distribution</h3>
+              <p className="text-emerald-100 text-sm">Events by rollup network</p>
+            </CardHeader>
+            <CardBody className="p-6">
+              {bridgeCountsLoading ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loading text="Loading bridge data..." />
+                </div>
+              ) : !bridgeEventCounts || bridgeEventCounts.length === 0 ? (
+                <div className="flex items-center justify-center h-64 text-gray-500">
+                  <p>No bridge data available</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={350}>
+                  <PieChart>
+                    <Pie
+                      data={bridgeEventCounts.map(item => ({
+                        name: getNetworkName(parseInt(item.network)),
+                        value: parseInt(item.bridges),
+                        networkId: parseInt(item.network)
+                      }))}
+                      cx="50%"
+                      cy="45%"
+                      labelLine={false}
+                      label={false}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {bridgeEventCounts.map((_, index) => {
+                        const colors = ['#10b981', '#0ea5e9', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
+                        return <Cell key={`bridge-cell-${index}`} fill={colors[index % colors.length]} />;
+                      })}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value: number) => [value.toLocaleString(), 'Events']}
+                      labelFormatter={(label) => `Network: ${label}`}
+                    />
+                    <Legend 
+                      verticalAlign="bottom"
+                      height={36}
+                      wrapperStyle={{
+                        paddingTop: '20px',
+                        fontSize: '12px'
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </CardBody>
+          </Card>
+
+          {/* Claim Events Distribution */}
+          <Card className="shadow-2xl border-0 bg-white depth-card overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-orange-500 to-red-600 text-white">
+              <h3 className="text-lg font-semibold">Claim Events Distribution</h3>
+              <p className="text-orange-100 text-sm">Claims by rollup network</p>
+            </CardHeader>
+            <CardBody className="p-6">
+              {claimCountsLoading ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loading text="Loading claim data..." />
+                </div>
+              ) : !claimEventCounts || claimEventCounts.length === 0 ? (
+                <div className="flex items-center justify-center h-64 text-gray-500">
+                  <p>No claim data available</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={350}>
+                  <PieChart>
+                    <Pie
+                      data={claimEventCounts.map(item => ({
+                        name: getNetworkName(parseInt(item.network)),
+                        value: parseInt(item.claims),
+                        networkId: parseInt(item.network)
+                      }))}
+                      cx="50%"
+                      cy="45%"
+                      labelLine={false}
+                      label={false}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {claimEventCounts.map((_, index) => {
+                        const colors = ['#f97316', '#ef4444', '#ec4899', '#8b5cf6', '#6366f1', '#0ea5e9', '#10b981', '#84cc16'];
+                        return <Cell key={`claim-cell-${index}`} fill={colors[index % colors.length]} />;
+                      })}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value: number) => [value.toLocaleString(), 'Claims']}
+                      labelFormatter={(label) => `Network: ${label}`}
+                    />
+                    <Legend 
+                      verticalAlign="bottom"
+                      height={36}
+                      wrapperStyle={{
+                        paddingTop: '20px',
+                        fontSize: '12px'
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </CardBody>
           </Card>
         </div>

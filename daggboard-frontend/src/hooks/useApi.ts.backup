@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { apiService, type Rollup, type TokenStats, type BridgeEventCount, type ClaimEventCount, type FlowData } from '../utils/api';
+import { apiService, type Rollup, type TokenStats, type WrappedTokenEvent, type BridgeEventCount, type ClaimEventCount, type FlowData } from '../utils/api';
 
 export interface UseDataResult<T> {
   data: T | null;
@@ -40,6 +40,37 @@ export function useRollups(): UseDataResult<Rollup[]> {
   return { data, loading, error, refetch };
 }
 
+export function useFlowData(rollupId: number): UseDataResult<FlowData[]> {
+  const [data, setData] = useState<FlowData[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const flows = await apiService.getFlowDataForRollup(rollupId);
+      setData(flows);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch flow data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch flow data');
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [rollupId]);
+
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, error, refetch };
+}
+
 export function useRollup(rollupId: number): UseDataResult<Rollup> {
   const [data, setData] = useState<Rollup | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,6 +86,37 @@ export function useRollup(rollupId: number): UseDataResult<Rollup> {
       console.error('Failed to fetch rollup:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch rollup');
       setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [rollupId]);
+
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, error, refetch };
+}
+
+export function useFlowData(rollupId: number): UseDataResult<FlowData[]> {
+  const [data, setData] = useState<FlowData[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const flows = await apiService.getFlowDataForRollup(rollupId);
+      setData(flows);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch flow data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch flow data');
+      setData([]);
     } finally {
       setLoading(false);
     }
@@ -197,6 +259,105 @@ export function useTokenStats(rollupId: number) {
   };
 }
 
+export function useWrappedTokens(rollupId: number): UseDataResult<WrappedTokenEvent[]> {
+  const [data, setData] = useState<WrappedTokenEvent[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const tokens = await apiService.getWrappedTokensForRollup(rollupId);
+      setData(tokens);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch wrapped tokens:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch wrapped tokens');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [rollupId]);
+
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, error, refetch };
+}
+
+export function useFlowData(rollupId: number): UseDataResult<FlowData[]> {
+  const [data, setData] = useState<FlowData[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const flows = await apiService.getFlowDataForRollup(rollupId);
+      setData(flows);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch flow data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch flow data');
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [rollupId]);
+
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, error, refetch };
+}
+
+export function useEventCounts(rollupId?: number) {
+  const [bridgeCount, setBridgeCount] = useState<number>(0);
+  const [claimCount, setClaimCount] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async (silent = false) => {
+    try {
+      if (!silent) setLoading(true);
+      const [bridgeCountResult, claimCountResult] = await Promise.all([
+        apiService.getBridgeEventsCount(rollupId),
+        apiService.getClaimEventsCount(rollupId),
+      ]);
+      
+      setBridgeCount(bridgeCountResult);
+      setClaimCount(claimCountResult);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch event counts:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch event counts';
+      setError(errorMessage);
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [rollupId]);
+
+  const refetch = useCallback(() => {
+    fetchData(false);
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { bridgeCount, claimCount, loading, error, refetch };
+}
+
 export function useSyncDistance(rollupId: number): UseDataResult<number> {
   const [data, setData] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -212,6 +373,37 @@ export function useSyncDistance(rollupId: number): UseDataResult<number> {
       console.error('Failed to fetch sync distance:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch sync distance');
       setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [rollupId]);
+
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, error, refetch };
+}
+
+export function useFlowData(rollupId: number): UseDataResult<FlowData[]> {
+  const [data, setData] = useState<FlowData[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const flows = await apiService.getFlowDataForRollup(rollupId);
+      setData(flows);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch flow data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch flow data');
+      setData([]);
     } finally {
       setLoading(false);
     }
@@ -304,6 +496,120 @@ export function useSyncDistances(rollups: { rollup_id: number; latest_bridge_syn
   return { distances, loadingStates, loading, error, refetch };
 }
 
+export function useRollupSummaries(rollups: { rollup_id: number; latest_bridge_synced_block: number | null }[]) {
+  const [summaries, setSummaries] = useState<Map<number, { totalAssets: number; totalLiabilities: number; difference: number; allLoaded: boolean; tokenCount: number }>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const validRollupsStr = rollups
+    .filter(r => r.latest_bridge_synced_block !== -1)
+    .map(r => r.rollup_id)
+    .join(',');
+
+  const fetchData = useCallback(async () => {
+    const validRollupIds = validRollupsStr.split(',').filter(id => id).map(Number);
+    
+    if (validRollupIds.length === 0) {
+      setSummaries(new Map());
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Initialize summaries
+      const initialSummaries = new Map();
+      validRollupIds.forEach(rollupId => {
+        initialSummaries.set(rollupId, {
+          totalAssets: 0,
+          totalLiabilities: 0,
+          difference: 0,
+          allLoaded: false,
+          tokenCount: 0
+        });
+      });
+      setSummaries(initialSummaries);
+      setLoading(false);
+
+      // Fetch summaries for each rollup individually
+      validRollupIds.forEach(async (rollupId) => {
+        try {
+          const mappings = await apiService.getTokenMappings(rollupId);
+          
+          if (mappings.length === 0) {
+            setSummaries(prev => {
+              const newMap = new Map(prev);
+              newMap.set(rollupId, {
+                totalAssets: 0,
+                totalLiabilities: 0,
+                difference: 0,
+                allLoaded: true,
+                tokenCount: 0
+              });
+              return newMap;
+            });
+            return;
+          }
+
+          // Load all token balances for this rollup
+          const tokenPromises = mappings.map(mapping => 
+            apiService.loadTokenBalances(rollupId, mapping)
+          );
+
+          const tokens = await Promise.all(tokenPromises);
+          
+          const totalAssets = tokens.reduce((sum, token) => sum + parseFloat(token.assets_balance || '0'), 0);
+          const totalLiabilities = tokens.reduce((sum, token) => sum + parseFloat(token.liabilities_balance || '0'), 0);
+          
+          setSummaries(prev => {
+            const newMap = new Map(prev);
+            newMap.set(rollupId, {
+              totalAssets,
+              totalLiabilities,
+              difference: totalAssets - totalLiabilities,
+              allLoaded: true,
+              tokenCount: tokens.length
+            });
+            return newMap;
+          });
+
+        } catch (err) {
+          console.error(`Failed to fetch summary for rollup ${rollupId}:`, err);
+          setSummaries(prev => {
+            const newMap = new Map(prev);
+            newMap.set(rollupId, {
+              totalAssets: 0,
+              totalLiabilities: 0,
+              difference: 0,
+              allLoaded: true,
+              tokenCount: 0
+            });
+            return newMap;
+          });
+        }
+      });
+
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch rollup summaries:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch rollup summaries');
+      setSummaries(new Map());
+      setLoading(false);
+    }
+  }, [validRollupsStr]);
+
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { summaries, loading, error, refetch };
+}
+
 export function useBridgeEventCounts(): UseDataResult<BridgeEventCount[]> {
   const [data, setData] = useState<BridgeEventCount[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -323,6 +629,37 @@ export function useBridgeEventCounts(): UseDataResult<BridgeEventCount[]> {
       setLoading(false);
     }
   }, []);
+
+  const refetch = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, error, refetch };
+}
+
+export function useFlowData(rollupId: number): UseDataResult<FlowData[]> {
+  const [data, setData] = useState<FlowData[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const flows = await apiService.getFlowDataForRollup(rollupId);
+      setData(flows);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch flow data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch flow data');
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [rollupId]);
 
   const refetch = useCallback(() => {
     fetchData();

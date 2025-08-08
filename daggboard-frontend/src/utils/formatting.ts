@@ -15,7 +15,20 @@ export function formatTokenAmount(
   precision: number = 4
 ): string {
   try {
-    const amountBN = BigInt(amount.toString());
+    // Handle null, undefined, or empty string
+    if (amount === null || amount === undefined || amount === '') {
+      return '0';
+    }
+
+    // Convert to string first to handle very large numbers
+    const amountStr = amount.toString();
+    
+    // Handle non-numeric strings
+    if (isNaN(Number(amountStr)) && !/^\d+$/.test(amountStr)) {
+      return '0';
+    }
+
+    const amountBN = BigInt(amountStr);
     const divisor = BigInt(10 ** decimals);
     
     if (amountBN === BigInt(0)) return '0';
@@ -27,14 +40,21 @@ export function formatTokenAmount(
       return whole.toLocaleString();
     }
     
-    const decimal = Number(remainder) / Number(divisor);
-    const wholeStr = whole.toLocaleString();
-    const decimalStr = decimal.toFixed(precision).substring(2);
+    // For decimal part, convert remainder to string and pad with zeros
+    const remainderStr = remainder.toString().padStart(decimals, '0');
+    const decimalPart = remainderStr.substring(0, precision);
     
-    return `${wholeStr}.${decimalStr}`;
+    // Remove trailing zeros from decimal part
+    const trimmedDecimal = decimalPart.replace(/0+$/, '');
+    
+    if (trimmedDecimal === '') {
+      return whole.toLocaleString();
+    }
+    
+    return `${whole.toLocaleString()}.${trimmedDecimal}`;
   } catch (error) {
-    console.error('Error formatting token amount:', error);
-    return amount.toString();
+    console.error('Error formatting token amount:', error, 'Input:', amount);
+    return amount?.toString() || '0';
   }
 }
 

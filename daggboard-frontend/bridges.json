@@ -1,0 +1,34 @@
+[
+    {
+        "bridges": "217775",
+        "network": "0"
+    },
+    {
+        "network": "1",
+        "bridges": "57721"
+    },
+    {
+        "bridges": "6849",
+        "network": "3"
+    },
+    {
+        "network": "7",
+        "bridges": "229"
+    },
+    {
+        "bridges": "105",
+        "network": "8"
+    },
+    {
+        "network": "15",
+        "bridges": "98"
+    },
+    {
+        "bridges": "4",
+        "network": "14"
+    },
+    {
+        "bridges": "2",
+        "network": "18"
+    }
+]

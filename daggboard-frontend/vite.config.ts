@@ -25,6 +25,11 @@ export default defineConfig({
         target: 'http://65.21.69.162:3000',
         changeOrigin: true,
         secure: false,
+      },
+      '/query': {
+        target: 'http://65.21.69.162:3000',
+        changeOrigin: true,
+        secure: false,
       }
     }
   }

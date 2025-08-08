@@ -46,8 +46,8 @@ export function BalanceChart({ data, type = 'bar', height = 300 }: BalanceChartP
 
   // Transform data for charts
   const chartData = data.map((token) => ({
-    name: shortenAddress(token.token_address),
-    fullAddress: token.token_address,
+    name: shortenAddress(token.originTokenAddress),
+    fullAddress: token.originTokenAddress,
     assets: parseFloat(token.assets_balance),
     liabilities: parseFloat(token.liabilities_balance),
     difference: parseFloat(token.difference),

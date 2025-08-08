@@ -6,6 +6,7 @@ const ENDPOINTS = {
   ASSET_BALANCE: '/bridge_balance',
   LIABILITY_BALANCE: '/wrapped_balance',
   SYNC: '/sync',
+  QUERY: '/query',
 } as const;
 
 // Types based on the schema provided
@@ -36,14 +37,27 @@ export interface TokenBalance {
   balance: string;
 }
 
+export interface AssetBalanceResponse {
+  balance_bridge: string;
+}
+
+export interface LiabilityBalanceResponse {
+  circulating_supply: string;
+}
+
 export interface TokenStats {
-  token_address: string;
-  token_name?: string;
-  token_symbol?: string;
+  id: string;
+  rollup_id: number;
+  originNetwork: number;
+  destinationNetwork: number;
+  originTokenAddress: string;
+  wrappedTokenAddress: string;
+  metadata: string;
   assets_balance: string;
   liabilities_balance: string;
   difference: string;
   is_balanced: boolean;
+  loading?: boolean;
 }
 
 export interface BridgeEvent {
@@ -82,6 +96,26 @@ export interface ClaimEvent {
 
 export interface SyncDistance {
   distance: number;
+}
+
+export interface BridgeEventCount {
+  network: string;
+  bridges: string;
+}
+
+export interface ClaimEventCount {
+  network: string;
+  claims: string;
+}
+
+export interface FlowData {
+  source: string;
+  target: string;
+  value: string;
+}
+
+export interface QueryResponse<T = any> {
+  data: T[];
 }
 
 class ApiService {
@@ -178,60 +212,77 @@ class ApiService {
     return [];
   }
 
-  // Get combined token stats (assets vs liabilities)
-  async getTokenStats(rollupId: number): Promise<TokenStats[]> {
-    const [assets, liabilities] = await Promise.all([
-      this.getAssetBalances(rollupId),
-      this.getLiabilityBalances(rollupId)
-    ]);
+  // Get individual asset balance for a specific token
+  async getIndividualAssetBalance(rollupId: number, tokenAddress: string): Promise<string> {
+    const params = new URLSearchParams({
+      rollup_id: rollupId.toString(),
+      token_address: tokenAddress
+    });
+    
+    const url = `${ENDPOINTS.ASSET_BALANCE}?${params}`;
+    const response = await this.request<AssetBalanceResponse>(url);
+    return response.balance_bridge;
+  }
 
-    // Combine assets and liabilities data
-    const tokenMap = new Map<string, TokenStats>();
+  // Get individual liability balance for a specific wrapped token
+  async getIndividualLiabilityBalance(rollupId: number, wrappedTokenAddress: string): Promise<string> {
+    const params = new URLSearchParams({
+      rollup_id: rollupId.toString(),
+      token_address: wrappedTokenAddress
+    });
+    
+    const url = `${ENDPOINTS.LIABILITY_BALANCE}?${params}`;
+    const response = await this.request<LiabilityBalanceResponse>(url);
+    return response.circulating_supply;
+  }
 
-    // Process assets
-    assets.forEach(asset => {
-      tokenMap.set(asset.token_address, {
-        token_address: asset.token_address,
-        token_name: asset.token_name,
-        token_symbol: asset.token_symbol,
-        assets_balance: asset.balance,
+  // Get wrapped token events and return them ready for progressive loading
+  async getTokenMappings(rollupId: number): Promise<Omit<TokenStats, 'assets_balance' | 'liabilities_balance' | 'difference' | 'is_balanced'>[]> {
+    const wrappedTokens = await this.getWrappedTokensForRollup(rollupId);
+    
+    return wrappedTokens.map(token => ({
+      id: token.id,
+      rollup_id: token.rollup_id,
+      originNetwork: token.originNetwork,
+      destinationNetwork: rollupId,
+      originTokenAddress: token.originTokenAddress,
+      wrappedTokenAddress: token.wrappedTokenAddress,
+      metadata: token.metadata,
+      loading: true
+    }));
+  }
+
+  // Load individual token balance data
+  async loadTokenBalances(rollupId: number, mapping: Omit<TokenStats, 'assets_balance' | 'liabilities_balance' | 'difference' | 'is_balanced'>): Promise<TokenStats> {
+    try {
+      const [assetsBalance, liabilitiesBalance] = await Promise.all([
+        this.getIndividualAssetBalance(rollupId, mapping.originTokenAddress),
+        this.getIndividualLiabilityBalance(rollupId, mapping.wrappedTokenAddress)
+      ]);
+
+      const assetsValue = parseFloat(assetsBalance || '0');
+      const liabilitiesValue = parseFloat(liabilitiesBalance || '0');
+      const difference = assetsValue - liabilitiesValue;
+
+      return {
+        ...mapping,
+        assets_balance: assetsBalance || '0',
+        liabilities_balance: liabilitiesBalance || '0',
+        difference: difference.toString(),
+        is_balanced: difference >= 0,
+        loading: false
+      };
+    } catch (error) {
+      console.error(`Failed to load balances for token ${mapping.originTokenAddress}:`, error);
+      return {
+        ...mapping,
+        assets_balance: '0',
         liabilities_balance: '0',
-        difference: asset.balance,
-        is_balanced: true
-      });
-    });
-
-    // Process liabilities
-    liabilities.forEach(liability => {
-      const existing = tokenMap.get(liability.token_address);
-      if (existing) {
-        const assetsValue = parseFloat(existing.assets_balance);
-        const liabilitiesValue = parseFloat(liability.balance);
-        const difference = assetsValue - liabilitiesValue;
-        
-        tokenMap.set(liability.token_address, {
-          ...existing,
-          liabilities_balance: liability.balance,
-          difference: difference.toString(),
-          is_balanced: difference >= 0
-        });
-      } else {
-        const liabilitiesValue = parseFloat(liability.balance);
-        tokenMap.set(liability.token_address, {
-          token_address: liability.token_address,
-          token_name: liability.token_name,
-          token_symbol: liability.token_symbol,
-          assets_balance: '0',
-          liabilities_balance: liability.balance,
-          difference: (-liabilitiesValue).toString(),
-          is_balanced: false
-        });
-      }
-    });
-
-    return Array.from(tokenMap.values()).sort((a, b) => 
-      parseFloat(b.assets_balance) - parseFloat(a.assets_balance)
-    );
+        difference: '0',
+        is_balanced: true,
+        loading: false
+      };
+    }
   }
 
   // Get bridge events count
@@ -269,6 +320,61 @@ class ApiService {
     const url = `${ENDPOINTS.SYNC}/${rollupId}`;
     const response = await this.request<SyncDistance>(url);
     return response.distance;
+  }
+
+  // Execute SQL query
+  async executeQuery<T = any>(query: string): Promise<T[]> {
+    const params = new URLSearchParams();
+    params.append('q', query);
+    const url = `${ENDPOINTS.QUERY}?${params}`;
+    
+    const response = await this.request<QueryResponse<T> | T[]>(url);
+    
+    // Handle both response formats
+    if (Array.isArray(response)) {
+      return response;
+    } else if (response && typeof response === 'object' && 'data' in response && Array.isArray(response.data)) {
+      return response.data;
+    }
+    return [];
+  }
+
+  // Get bridge events count by rollup
+  async getBridgeEventsCountByRollup(): Promise<BridgeEventCount[]> {
+    const query = `SELECT rollup_id AS network, COUNT(*) AS bridges FROM bridge_events GROUP BY network ORDER BY bridges DESC`;
+    return this.executeQuery<BridgeEventCount>(query);
+  }
+
+  // Get claim events count by rollup
+  async getClaimEventsCountByRollup(): Promise<ClaimEventCount[]> {
+    const query = `SELECT rollup_id AS network, COUNT(*) AS claims FROM claim_events GROUP BY rollup_id ORDER BY claims DESC`;
+    return this.executeQuery<ClaimEventCount>(query);
+  }
+
+  // Get flow data for Sankey diagram for a specific rollup
+  async getFlowDataForRollup(rollupId: number): Promise<FlowData[]> {
+    const query = `
+WITH flows AS (
+    /* Outgoing transactions: events written on the chosen rollup */
+    SELECT rollup_id        AS source,
+           destinationNetwork AS target
+    FROM   bridge_events
+    WHERE  rollup_id = ${rollupId}
+
+    UNION ALL
+
+    /* Incoming transactions: events whose destination is the chosen rollup */
+    SELECT rollup_id        AS source,
+           destinationNetwork AS target
+    FROM   bridge_events
+    WHERE  destinationNetwork = ${rollupId}
+)
+SELECT source, target, COUNT(*) AS value
+FROM   flows
+GROUP  BY source, target
+ORDER  BY value DESC`;
+    
+    return this.executeQuery<FlowData>(query);
   }
 }
 
