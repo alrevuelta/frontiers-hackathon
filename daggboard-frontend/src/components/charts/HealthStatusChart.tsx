@@ -11,10 +11,10 @@ import {
   YAxis,
   CartesianGrid,
 } from 'recharts';
-import type { TokenStats } from '../../utils/api';
+import type { GroupedTokenStats } from '../../utils/api';
 
 export interface HealthStatusChartProps {
-  data: TokenStats[];
+  data: GroupedTokenStats[];
   type?: 'pie' | 'bar';
   height?: number;
 }

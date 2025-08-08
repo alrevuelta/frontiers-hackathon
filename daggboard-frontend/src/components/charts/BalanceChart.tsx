@@ -11,11 +11,11 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import type { TokenStats } from '../../utils/api';
-import { formatTokenAmount, shortenAddress } from '../../utils/formatting';
+import type { GroupedTokenStats } from '../../utils/api';
+import { formatDecimalAmount, shortenAddress } from '../../utils/formatting';
 
 export interface BalanceChartProps {
-  data: TokenStats[];
+  data: GroupedTokenStats[];
   type?: 'bar' | 'pie';
   height?: number;
 }
@@ -49,7 +49,7 @@ export function BalanceChart({ data, type = 'bar', height = 300 }: BalanceChartP
     name: shortenAddress(token.originTokenAddress),
     fullAddress: token.originTokenAddress,
     assets: parseFloat(token.assets_balance),
-    liabilities: parseFloat(token.liabilities_balance),
+    liabilities: parseFloat(token.total_liabilities),
     difference: parseFloat(token.difference),
     isBalanced: token.is_balanced,
   })).slice(0, 10); // Show top 10 tokens
@@ -63,15 +63,15 @@ export function BalanceChart({ data, type = 'bar', height = 300 }: BalanceChartP
           <div className="space-y-1">
             <p className="text-sm">
               <span className="text-green-600">Assets: </span>
-              {formatTokenAmount(data.assets.toString(), 18, 4)}
+              {formatDecimalAmount(data.assets.toString(), 4)}
             </p>
             <p className="text-sm">
               <span className="text-red-600">Liabilities: </span>
-              {formatTokenAmount(data.liabilities.toString(), 18, 4)}
+              {formatDecimalAmount(data.liabilities.toString(), 4)}
             </p>
             <p className="text-sm">
               <span className={`${data.difference >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                Difference: {formatTokenAmount(Math.abs(data.difference).toString(), 18, 4)}
+                Difference: {formatDecimalAmount(Math.abs(data.difference).toString(), 4)}
               </span>
             </p>
             <p className="text-sm">
@@ -145,7 +145,7 @@ export function BalanceChart({ data, type = 'bar', height = 300 }: BalanceChartP
         <YAxis 
           stroke="#6b7280"
           fontSize={12}
-          tickFormatter={(value) => formatTokenAmount(value.toString(), 18, 2)}
+          tickFormatter={(value) => formatDecimalAmount(value.toString(), 2)}
         />
         <Tooltip content={<CustomTooltip />} />
         <Legend />

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { apiService, type Rollup, type TokenStats, type BridgeEventCount, type ClaimEventCount, type FlowData } from '../utils/api';
+import { apiService, type Rollup, type GroupedTokenStats, type BridgeEventCount, type ClaimEventCount, type FlowData } from '../utils/api';
 
 export interface UseDataResult<T> {
   data: T | null;
@@ -72,7 +72,7 @@ export function useRollup(rollupId: number): UseDataResult<Rollup> {
 }
 
 export function useTokenStats(rollupId: number) {
-  const [tokenStats, setTokenStats] = useState<TokenStats[]>([]);
+  const [tokenStats, setTokenStats] = useState<GroupedTokenStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadingMap, setLoadingMap] = useState<Map<string, boolean>>(new Map());
@@ -82,7 +82,7 @@ export function useTokenStats(rollupId: number) {
       setLoading(true);
       setError(null);
       
-      // First, get the token mappings
+      // First, get the token mappings (grouped by originTokenAddress)
       const mappings = await apiService.getTokenMappings(rollupId);
       
       if (mappings.length === 0) {
@@ -92,17 +92,8 @@ export function useTokenStats(rollupId: number) {
         return;
       }
 
-      // Initialize token stats with loading states
-      const initialStats: TokenStats[] = mappings.map(mapping => ({
-        ...mapping,
-        assets_balance: '0',
-        liabilities_balance: '0',
-        difference: '0',
-        is_balanced: true,
-        loading: true
-      }));
-      
-      setTokenStats(initialStats);
+      // The mappings already come with all required fields initialized
+      setTokenStats(mappings);
 
       // Initialize loading map
       const initialLoadingMap = new Map();
@@ -113,12 +104,12 @@ export function useTokenStats(rollupId: number) {
 
       setLoading(false);
 
-      // Load balances for each token individually and update as they complete
+      // Load balances for each grouped token individually and update as they complete
       mappings.forEach(async (mapping) => {
         try {
-          const completedTokenStat = await apiService.loadTokenBalances(rollupId, mapping);
+          const completedTokenStat = await apiService.loadTokenBalances(mapping);
           
-          // Update the specific token in the array
+          // Update the specific grouped token in the array
           setTokenStats(prev => prev.map(stat => 
             stat.id === mapping.id ? completedTokenStat : stat
           ));
@@ -139,9 +130,14 @@ export function useTokenStats(rollupId: number) {
               ...stat,
               loading: false,
               assets_balance: '0',
-              liabilities_balance: '0',
+              total_liabilities: '0',
               difference: '0',
-              is_balanced: true
+              is_balanced: true,
+              liability_entries: stat.liability_entries.map(entry => ({
+                ...entry,
+                liability_balance: '0',
+                loading: false
+              }))
             } : stat
           ));
 
@@ -170,11 +166,11 @@ export function useTokenStats(rollupId: number) {
     fetchData();
   }, [fetchData]);
 
-  // Calculate summary stats
+  // Calculate summary stats for grouped tokens
   const summary = useMemo(() => {
     const loadedTokens = tokenStats.filter(t => !t.loading);
     const totalAssets = loadedTokens.reduce((sum, token) => sum + parseFloat(token.assets_balance || '0'), 0);
-    const totalLiabilities = loadedTokens.reduce((sum, token) => sum + parseFloat(token.liabilities_balance || '0'), 0);
+    const totalLiabilities = loadedTokens.reduce((sum, token) => sum + parseFloat(token.total_liabilities || '0'), 0);
     const allLoaded = loadedTokens.length === tokenStats.length && tokenStats.length > 0;
     
     return {
@@ -396,3 +392,4 @@ export function useFlowData(rollupId: number): UseDataResult<FlowData[]> {
 
   return { data, loading, error, refetch };
 }
+

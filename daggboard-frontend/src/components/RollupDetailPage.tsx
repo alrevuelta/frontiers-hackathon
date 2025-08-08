@@ -12,12 +12,11 @@ import {
 import { useRollup, useTokenStats, useSyncDistance, useFlowData } from '../hooks/useApi';
 import { Card, CardHeader, CardBody, Button, Badge, Loading, ErrorMessage } from './ui';
 import {
-  formatTokenAmount,
+  formatDecimalAmount,
   formatBlockNumber,
   getNetworkName,
   getBlockExplorerUrl,
   shortenAddress,
-  parseTokenMetadata,
 } from '../utils/formatting';
 import { SankeyChart } from './charts/SankeyChart';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -153,7 +152,7 @@ export function RollupDetailPage() {
               <p className="text-emerald-100 text-xs font-medium mb-1">Total Assets (L1)</p>
               <div className="text-lg font-bold text-white">
                 {summary.allLoaded ? (
-                  formatTokenAmount(summary.totalAssets.toString(), 18, 2)
+                  formatDecimalAmount(summary.totalAssets.toString(), 2)
                 ) : (
                   <div className="flex items-center justify-center">
                     <Loading size="sm" />
@@ -170,7 +169,7 @@ export function RollupDetailPage() {
               <p className="text-orange-100 text-xs font-medium mb-1">Total Liabilities (L2)</p>
               <div className="text-lg font-bold text-white">
                 {summary.allLoaded ? (
-                  formatTokenAmount(summary.totalLiabilities.toString(), 18, 2)
+                  formatDecimalAmount(summary.totalLiabilities.toString(), 2)
                 ) : (
                   <div className="flex items-center justify-center">
                     <Loading size="sm" />
@@ -287,37 +286,38 @@ export function RollupDetailPage() {
             ) : (
               <div className="overflow-hidden">
                 <div className="grid gap-4 p-6">
-                  {tokenStats.map((token) => {
-                    const tokenMetadata = parseTokenMetadata(token.metadata);
-                    const originExplorerUrl = getBlockExplorerUrl(token.originNetwork, token.originTokenAddress);
-                    const wrappedExplorerUrl = getBlockExplorerUrl(token.destinationNetwork, token.wrappedTokenAddress);
-                    const differenceValue = parseFloat(token.difference);
-                    const isLoading = token.loading || loadingMap.get(token.id);
+                  {(tokenStats as any[]).map((groupedToken: any) => {
+                    const tokenMetadata = { name: groupedToken.token_name, symbol: groupedToken.token_symbol };
+                    const originExplorerUrl = getBlockExplorerUrl(groupedToken.originNetwork, groupedToken.originTokenAddress);
+                    const isLoading = groupedToken.loading || loadingMap.get(groupedToken.id);
                     
                     return (
-                      <div key={token.id} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg hover:border-slate-300 transition-all duration-300 depth-card">
+                      <div key={groupedToken.id} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg hover:border-slate-300 transition-all duration-300 depth-card">
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center space-x-3">
-                            <div className={`w-4 h-4 rounded-full ${token.is_balanced ? 'bg-emerald-400 shadow-lg shadow-emerald-400/30' : 'bg-amber-400 shadow-lg shadow-amber-400/30'}`} />
+                            <div className={`w-4 h-4 rounded-full ${groupedToken.is_balanced ? 'bg-emerald-400 shadow-lg shadow-emerald-400/30' : 'bg-amber-400 shadow-lg shadow-amber-400/30'}`} />
                             <div>
                               <div className="font-semibold text-slate-900">
                                 {tokenMetadata.name}
                               </div>
                               <div className="text-xs text-slate-500">
-                                Symbol: {tokenMetadata.symbol} | Source Network: {getNetworkName(token.rollup_id)} | Destination: {getNetworkName(token.destinationNetwork)}
+                                Symbol: {tokenMetadata.symbol} | Source Network: {getNetworkName(groupedToken.originNetwork)}
                               </div>
                             </div>
                           </div>
+                          <div className="text-xs text-slate-400">
+                            {groupedToken.liability_entries.length} destination{groupedToken.liability_entries.length !== 1 ? 's' : ''}
+                          </div>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
                           <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-4 border border-emerald-100">
                             <div className="text-emerald-600 font-semibold mb-2">Total deposits (assets)</div>
                             <div className="font-mono font-bold text-emerald-800 text-lg">
                               {isLoading ? (
                                 <Loading size="sm" />
                               ) : (
-                                formatTokenAmount(token.assets_balance, 18, 2)
+                                formatDecimalAmount(groupedToken.assets_balance, 2)
                               )}
                             </div>
                             <div className="mt-2">
@@ -327,45 +327,62 @@ export function RollupDetailPage() {
                                 rel="noopener noreferrer"
                                 className="text-xs text-emerald-600 hover:text-emerald-800 flex items-center transition-colors duration-200"
                               >
-                                {shortenAddress(token.originTokenAddress)} <ExternalLink className="w-3 h-3 ml-1" />
+                                {shortenAddress(groupedToken.originTokenAddress)} <ExternalLink className="w-3 h-3 ml-1" />
                               </a>
                             </div>
                           </div>
                           
                           <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-100">
                             <div className="text-amber-600 font-semibold mb-2">Total Claims (liability)</div>
-                            <div className="font-mono font-bold text-amber-800 text-lg">
+                            <div className="font-mono font-bold text-amber-800 text-lg mb-3">
                               {isLoading ? (
                                 <Loading size="sm" />
                               ) : (
-                                formatTokenAmount(token.liabilities_balance, 18, 2)
+                                formatDecimalAmount(groupedToken.total_liabilities, 2)
                               )}
                             </div>
-                            <div className="mt-2">
-                              <a
-                                href={wrappedExplorerUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-amber-600 hover:text-amber-800 flex items-center transition-colors duration-200"
-                              >
-                                {shortenAddress(token.wrappedTokenAddress)} <ExternalLink className="w-3 h-3 ml-1" />
-                              </a>
+                            <div className="text-xs text-amber-600 mb-3">
+                              Across {groupedToken.liability_entries.length} destination{groupedToken.liability_entries.length !== 1 ? 's' : ''}
                             </div>
-                          </div>
-                          
-                          <div className={`rounded-xl p-4 border ${differenceValue >= 0 ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100' : 'bg-gradient-to-br from-red-50 to-pink-50 border-red-100'}`}>
-                            <div className={`font-semibold mb-2 ${differenceValue >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                              Difference
-                            </div>
-                            <div className={`font-mono font-bold text-lg ${differenceValue >= 0 ? 'text-blue-800' : 'text-red-800'}`}>
-                              {isLoading ? (
-                                <Loading size="sm" />
-                              ) : (
-                                <>
-                                  {differenceValue >= 0 ? '+' : ''}
-                                  {formatTokenAmount(token.difference, 18, 2)}
-                                </>
-                              )}
+                            
+                            {/* Individual liability breakdown within the claims box */}
+                            <div className="border-t border-amber-200 pt-3 mt-3">
+                              <div className="text-xs font-medium text-amber-700 mb-2">Individual Breakdown:</div>
+                              <div className="space-y-2">
+                                {groupedToken.liability_entries.map((liability: any) => {
+                                  const liabilityExplorerUrl = getBlockExplorerUrl(liability.rollup_id, liability.wrappedTokenAddress);
+                                  const liabilityIsLoading = liability.loading;
+                                  
+                                  return (
+                                    <div key={liability.id} className="flex items-center justify-between p-2 bg-amber-100/50 rounded-md border border-amber-200">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="text-xs">
+                                          <div className="font-medium text-amber-800">
+                                            {getNetworkName(liability.rollup_id)}
+                                          </div>
+                                          <a
+                                            href={liabilityExplorerUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-amber-600 hover:text-amber-800 flex items-center transition-colors duration-200"
+                                          >
+                                            {shortenAddress(liability.wrappedTokenAddress)} <ExternalLink className="w-2 h-2 ml-1" />
+                                          </a>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="font-mono font-semibold text-amber-800 text-xs">
+                                          {liabilityIsLoading ? (
+                                            <Loading size="sm" />
+                                          ) : (
+                                            formatDecimalAmount(liability.liability_balance, 2)
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </div>
                         </div>

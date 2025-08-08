@@ -1,5 +1,7 @@
 // API service for backend integration
 // Use /api prefix for clean generic rewrite rule
+import { parseTokenMetadata } from './formatting';
+
 const ENDPOINTS = {
   ROLLUPS: '/api/table/rollups',
   WRAPPED_TOKENS: '/api/table/new_wrapped_token_events/filter',
@@ -8,6 +10,7 @@ const ENDPOINTS = {
   SYNC: '/api/sync',
   QUERY: '/api/query',
 } as const;
+
 
 // Types based on the schema provided
 export interface Rollup {
@@ -45,17 +48,34 @@ export interface LiabilityBalanceResponse {
   circulating_supply: string;
 }
 
-export interface TokenStats {
-  id: string;
+
+// Grouped token structures
+export interface LiabilityEntry {
+  id: string; // unique identifier for this liability entry
   rollup_id: number;
-  originNetwork: number;
   destinationNetwork: number;
-  originTokenAddress: string;
   wrappedTokenAddress: string;
+  liability_balance: string;
+  loading?: boolean;
+}
+
+export interface GroupedTokenStats {
+  id: string; // composite key: originNetwork-originTokenAddress
+  originTokenAddress: string;
+  originNetwork: number;
   metadata: string;
+  token_name: string;
+  token_symbol: string;
+  
+  // Single asset balance for this origin token
   assets_balance: string;
-  liabilities_balance: string;
-  difference: string;
+  
+  // Array of liability entries for different destination chains
+  liability_entries: LiabilityEntry[];
+  
+  // Aggregated values
+  total_liabilities: string; // sum of all liability_entries
+  difference: string; // assets_balance - total_liabilities
   is_balanced: boolean;
   loading?: boolean;
 }
@@ -244,54 +264,6 @@ class ApiService {
     return response.circulating_supply;
   }
 
-  // Get wrapped token events and return them ready for progressive loading
-  async getTokenMappings(rollupId: number): Promise<Omit<TokenStats, 'assets_balance' | 'liabilities_balance' | 'difference' | 'is_balanced'>[]> {
-    const wrappedTokens = await this.getWrappedTokensForRollup(rollupId);
-    
-    return wrappedTokens.map(token => ({
-      id: token.id,
-      rollup_id: token.rollup_id,
-      originNetwork: token.originNetwork,
-      destinationNetwork: rollupId,
-      originTokenAddress: token.originTokenAddress,
-      wrappedTokenAddress: token.wrappedTokenAddress,
-      metadata: token.metadata,
-      loading: true
-    }));
-  }
-
-  // Load individual token balance data
-  async loadTokenBalances(rollupId: number, mapping: Omit<TokenStats, 'assets_balance' | 'liabilities_balance' | 'difference' | 'is_balanced'>): Promise<TokenStats> {
-    try {
-      const [assetsBalance, liabilitiesBalance] = await Promise.all([
-        this.getIndividualAssetBalance(rollupId, mapping.originTokenAddress),
-        this.getIndividualLiabilityBalance(rollupId, mapping.wrappedTokenAddress)
-      ]);
-
-      const assetsValue = parseFloat(assetsBalance || '0');
-      const liabilitiesValue = parseFloat(liabilitiesBalance || '0');
-      const difference = assetsValue - liabilitiesValue;
-
-      return {
-        ...mapping,
-        assets_balance: assetsBalance || '0',
-        liabilities_balance: liabilitiesBalance || '0',
-        difference: difference.toString(),
-        is_balanced: difference >= 0,
-        loading: false
-      };
-    } catch (error) {
-      console.error(`Failed to load balances for token ${mapping.originTokenAddress}:`, error);
-      return {
-        ...mapping,
-        assets_balance: '0',
-        liabilities_balance: '0',
-        difference: '0',
-        is_balanced: true,
-        loading: false
-      };
-    }
-  }
 
   // Get bridge events count
   async getBridgeEventsCount(rollupId?: number): Promise<number> {
@@ -384,6 +356,151 @@ ORDER  BY value DESC`;
     
     return this.executeQuery<FlowData>(query);
   }
+
+  // Get wrapped token events and group them by originTokenAddress
+  async getTokenMappings(rollupId: number): Promise<GroupedTokenStats[]> {
+    const wrappedTokens = await this.getWrappedTokensForRollup(rollupId);
+    
+    // Group by originTokenAddress
+    const groupedMap = new Map<string, WrappedTokenEvent[]>();
+    
+    for (const token of wrappedTokens) {
+      const key = token.originTokenAddress;
+      if (!groupedMap.has(key)) {
+        groupedMap.set(key, []);
+      }
+      groupedMap.get(key)!.push(token);
+    }
+
+    // Convert groups to GroupedTokenStats structure
+    const groupedStats: GroupedTokenStats[] = [];
+
+    for (const [originTokenAddress, tokens] of groupedMap.entries()) {
+      // Use the first token for basic info (originNetwork, metadata should be same for same origin token)
+      const representativeToken = tokens[0];
+      const parsedMetadata = parseTokenMetadata(representativeToken.metadata);
+      
+      // Create liability entries for each unique rollup_id + wrappedTokenAddress combination
+      const liability_entries: LiabilityEntry[] = [];
+      
+      for (const token of tokens) {
+        liability_entries.push({
+          id: token.id,
+          rollup_id: token.rollup_id,
+          destinationNetwork: rollupId, // destination is the current rollup we're viewing
+          wrappedTokenAddress: token.wrappedTokenAddress,
+          liability_balance: '0', // Initialize with default value
+          loading: true // Initialize as loading
+        });
+      }
+
+      groupedStats.push({
+        id: `${representativeToken.originNetwork}-${originTokenAddress}`,
+        originTokenAddress,
+        originNetwork: representativeToken.originNetwork,
+        metadata: representativeToken.metadata,
+        token_name: parsedMetadata.name,
+        token_symbol: parsedMetadata.symbol,
+        assets_balance: '0', // Initialize with default
+        liability_entries: liability_entries,
+        total_liabilities: '0', // Initialize with default
+        difference: '0', // Initialize with default
+        is_balanced: true, // Initialize with default
+        loading: true
+      });
+    }
+
+    return groupedStats;
+  }
+
+  // Load balances for a token stat
+  async loadTokenBalances(
+    tokenMapping: GroupedTokenStats
+  ): Promise<GroupedTokenStats> {
+    try {
+      // Fetch asset balance using originNetwork as rollup_id + originTokenAddress
+      const assetBalancePromise = this.getIndividualAssetBalance(
+        tokenMapping.originNetwork, 
+        tokenMapping.originTokenAddress
+      );
+
+      // Fetch liability balance for each liability entry
+      const liabilityPromises = tokenMapping.liability_entries.map(async (entry) => {
+        try {
+          const balance = await this.getIndividualLiabilityBalance(
+            entry.rollup_id,
+            entry.wrappedTokenAddress
+          );
+          return {
+            ...entry,
+            liability_balance: balance || '0',
+            loading: false
+          };
+        } catch (error) {
+          console.error(`Failed to load liability for ${entry.wrappedTokenAddress}:`, error);
+          return {
+            ...entry,
+            liability_balance: '0',
+            loading: false
+          };
+        }
+      });
+
+      // Wait for all promises
+      const [assetsBalance, liabilityEntries] = await Promise.all([
+        assetBalancePromise,
+        Promise.all(liabilityPromises)
+      ]);
+
+      // Calculate total liabilities with better precision handling
+      const totalLiabilities = liabilityEntries.reduce((sum, entry) => {
+        const value = entry.liability_balance || '0';
+        try {
+          // Handle scientific notation and very large numbers
+          const numValue = parseFloat(value);
+          if (isNaN(numValue) || !isFinite(numValue)) {
+            console.warn(`Invalid liability balance: ${value}, skipping`);
+            return sum;
+          }
+          return sum + numValue;
+        } catch (error) {
+          console.warn(`Error parsing liability balance: ${value}, skipping`);
+          return sum;
+        }
+      }, 0);
+
+      const assetsValue = parseFloat(assetsBalance || '0');
+      const difference = assetsValue - totalLiabilities;
+
+      return {
+        ...tokenMapping,
+        assets_balance: assetsBalance || '0',
+        liability_entries: liabilityEntries,
+        total_liabilities: totalLiabilities.toString(),
+        difference: difference.toString(),
+        is_balanced: difference >= 0,
+        loading: false
+      };
+    } catch (error) {
+      console.error(`Failed to load balances for token ${tokenMapping.originTokenAddress}:`, error);
+      
+      return {
+        ...tokenMapping,
+        assets_balance: '0',
+        liability_entries: tokenMapping.liability_entries.map(entry => ({
+          ...entry,
+          liability_balance: '0',
+          loading: false
+        })),
+        total_liabilities: '0',
+        difference: '0',
+        is_balanced: true,
+        loading: false
+      };
+    }
+  }
+
+
 }
 
 // Singleton instance

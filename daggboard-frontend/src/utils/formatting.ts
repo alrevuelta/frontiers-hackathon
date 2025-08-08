@@ -79,6 +79,51 @@ export function formatCompactNumber(num: number): string {
 }
 
 /**
+ * Format already-decimal numbers with limited decimal places
+ * Keeps scientific notation for very large numbers, just trims decimals
+ */
+export function formatDecimalAmount(
+  amount: string | number,
+  precision: number = 2
+): string {
+  try {
+    if (!amount || amount === '0' || amount === 0) {
+      return '0';
+    }
+
+    // Handle string inputs that might be in scientific notation
+    let numValue: number;
+    if (typeof amount === 'string') {
+      numValue = parseFloat(amount);
+    } else {
+      numValue = amount;
+    }
+
+    // Check if the number is invalid
+    if (!isFinite(numValue) || isNaN(numValue)) {
+      return '0';
+    }
+
+    // For very large numbers (scientific notation), format with limited precision
+    // Use scientific notation for numbers >= 1e15 (15+ digits) or very small numbers
+    if (Math.abs(numValue) >= 1e15 || Math.abs(numValue) < 1e-6) {
+      // Use toExponential with the specified precision to properly round
+      return numValue.toExponential(precision);
+    }
+
+    // For normal numbers, use regular formatting with limited decimal places
+    return numValue.toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: precision
+    });
+
+  } catch (error) {
+    console.error('Error formatting decimal amount:', error, 'Input:', amount);
+    return amount?.toString() || '0';
+  }
+}
+
+/**
  * Parse metadata hex string to extract token information
  */
 export function parseTokenMetadata(metadataHex: string): TokenMetadata {
